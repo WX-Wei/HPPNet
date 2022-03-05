@@ -21,12 +21,12 @@ ex = Experiment('train_transcriber')
 def config():
     logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    iterations = 500000
+    iterations = 100*000
     resume_iteration = None
     checkpoint_interval = 1000
     train_on = 'MAESTRO'
 
-    batch_size = 8
+    batch_size = 4
     sequence_length = 327680
     model_complexity = 48
 
@@ -44,7 +44,7 @@ def config():
     clip_gradient_norm = 3
 
     validation_length = sequence_length
-    validation_interval = 500
+    validation_interval = 100
 
     ex.observers.append(FileStorageObserver.create(logdir))
 

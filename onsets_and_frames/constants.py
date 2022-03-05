@@ -15,4 +15,7 @@ MEL_FMIN = 30
 MEL_FMAX = SAMPLE_RATE // 2
 WINDOW_LENGTH = 2048
 
-DEFAULT_DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+N_HAR = 8
+BINS_PER_SEMITONE = 4
+
+DEFAULT_DEVICE =  'cuda' if torch.cuda.is_available() else 'cpu'

@@ -153,7 +153,7 @@ class MAESTRO(PianoRollAudioDataset):
             files = sorted([(os.path.join(self.path, row['audio_filename'].replace('.wav', '.flac')),
                              os.path.join(self.path, row['midi_filename'])) for row in metadata if row['split'] == group])
 
-            files = [(audio if os.path.exists(audio) else audio.replace('.flac', '.wav'), midi) for audio, midi in files]
+            files = [(audio if os.path.exists(audio) else audio.replace('.flac', '.wav'), midi) for audio, midi in files if os.path.exists(audio)]
 
         result = []
         for audio_path, midi_path in files:

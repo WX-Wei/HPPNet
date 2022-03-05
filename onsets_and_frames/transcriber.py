@@ -11,6 +11,8 @@ from torch import nn
 from .lstm import BiLSTM
 from .mel import melspectrogram
 
+from .nets import HarmSpecgramConvBlock
+
 
 class ConvStack(nn.Module):
     def __init__(self, input_features, output_features):
@@ -42,8 +44,11 @@ class ConvStack(nn.Module):
         )
 
     def forward(self, mel):
+        # add channel dimention
         x = mel.view(mel.size(0), 1, mel.size(1), mel.size(2))
+        # =>
         x = self.cnn(x)
+        # [C x T x F] => [T x C x F] => [T x (C*F)]
         x = x.transpose(1, 2).flatten(-2)
         x = self.fc(x)
         return x
@@ -57,19 +62,22 @@ class OnsetsAndFrames(nn.Module):
         sequence_model = lambda input_size, output_size: BiLSTM(input_size, output_size // 2)
 
         self.onset_stack = nn.Sequential(
-            ConvStack(input_features, model_size),
+            # ConvStack(input_features, model_size),
+            HarmSpecgramConvBlock(),
             sequence_model(model_size, model_size),
             nn.Linear(model_size, output_features),
             nn.Sigmoid()
         )
         self.offset_stack = nn.Sequential(
-            ConvStack(input_features, model_size),
+            # ConvStack(input_features, model_size),
+            HarmSpecgramConvBlock(),
             sequence_model(model_size, model_size),
             nn.Linear(model_size, output_features),
             nn.Sigmoid()
         )
         self.frame_stack = nn.Sequential(
-            ConvStack(input_features, model_size),
+            # ConvStack(input_features, model_size),
+            HarmSpecgramConvBlock(),
             nn.Linear(model_size, output_features),
             nn.Sigmoid()
         )
@@ -79,7 +87,8 @@ class OnsetsAndFrames(nn.Module):
             nn.Sigmoid()
         )
         self.velocity_stack = nn.Sequential(
-            ConvStack(input_features, model_size),
+            # ConvStack(input_features, model_size),
+            HarmSpecgramConvBlock(),
             nn.Linear(model_size, output_features)
         )
 
@@ -99,7 +108,16 @@ class OnsetsAndFrames(nn.Module):
         frame_label = batch['frame']
         velocity_label = batch['velocity']
 
-        mel = melspectrogram(audio_label.reshape(-1, audio_label.shape[-1])[:, :-1]).transpose(-1, -2)
+        audio_label_reshape = audio_label.reshape(-1, audio_label.shape[-1])#[:, :-1]
+        # => [n_mel x T] => [T x n_mel]
+        # mel = melspectrogram(audio_label_reshape).transpose(-1, -2)
+
+        # => [T x (88*4) x 16]
+
+
+        mel = audio_label_reshape
+
+        # => [T x 88]
         onset_pred, offset_pred, _, frame_pred, velocity_pred = self(mel)
 
         predictions = {
