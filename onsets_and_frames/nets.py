@@ -42,7 +42,7 @@ class HarmSpecgramConvBlock(nn.Module):
         self.linear_1 = nn.Linear(64, 32)
         self.linear_2 = nn.Linear(32, 1)
 
-        self.linear3 = nn.Linear(88, 768)
+        self.linear3 = nn.Linear(88, 16 * MODEL_COMPLEXITY)
 
 
     def forward(self, waveforms):

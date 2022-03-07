@@ -14,6 +14,7 @@ from tqdm import tqdm
 from evaluate import evaluate
 from onsets_and_frames import *
 
+
 ex = Experiment('train_transcriber')
 
 
@@ -21,14 +22,14 @@ ex = Experiment('train_transcriber')
 def config():
     logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    iterations = 100*000
+    iterations = 100*1000
     resume_iteration = None
     checkpoint_interval = 1000
     train_on = 'MAESTRO'
 
     batch_size = 4
     sequence_length = 327680
-    model_complexity = 48
+    model_complexity = constants.MODEL_COMPLEXITY
 
     if torch.cuda.is_available() and torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory < 10e9:
         batch_size //= 2
