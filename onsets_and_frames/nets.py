@@ -17,6 +17,13 @@ class HarmSpecgramConvBlock(nn.Module):
             nn.MaxPool3d(pool_size),
             nn.BatchNorm3d(channel_out),
             )
+    def dil_conv2d_block(self, dil_rate):
+        return nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=[1, 3], padding=[0, dil_rate], dilation=dil_rate),
+            nn.ReLU(),
+            # nn.Conv2d(64, 64, kernel_size=3, padding='same', padding_mode='replicate'),
+            # nn.ReLU(),
+        )
     def __init__(self, output_bins) -> None:
         super().__init__()
         self.device = DEFAULT_DEVICE
@@ -35,9 +42,20 @@ class HarmSpecgramConvBlock(nn.Module):
         # self.conv3d_block_5 = self.get_conv3d_block(64, 64, pool_size=[1, 1, 2])
         # self.conv3d_block_6 = self.get_conv3d_block(64, 64, pool_size=[1, 1, 2])
 
-        self.dil_conv2d_1 = nn.Conv2d(64, 64, kernel_size=[1, 3], padding=[0, 12], dilation=12)
-        self.dil_conv2d_2 = nn.Conv2d(64, 64, kernel_size=[1, 3], padding=[0, 12], dilation=12)
-        self.dil_conv2d_3 = nn.Conv2d(64, 64, kernel_size=[1, 3], padding=[0, 19], dilation=19)
+        self.dil_block = nn.Sequential(
+            self.dil_conv2d_block(12),
+            self.dil_conv2d_block(19),
+            self.dil_conv2d_block(24),
+            self.dil_conv2d_block(28),
+            # self.dil_conv2d_block(31),
+            self.dil_conv2d_block(36),
+        )
+
+        # self.dil_conv2d_1 = 
+        # self.dil_conv2d_2 = 
+        # self.dil_conv2d_3 = 
+        # self.dil_conv2d_4 = 
+
 
         self.linear_1 = nn.Linear(64, 32)
         self.linear_2 = nn.Linear(32, 1)
@@ -66,24 +84,27 @@ class HarmSpecgramConvBlock(nn.Module):
         # x = self.conv3d_block_6(x)
         # => [b x ch x T x 88]
         x = torch.squeeze(x, dim = 4)
+
+        x = self.dil_block(x)
         
-        x = self.dil_conv2d_1(x)
-        x = torch.relu(x)
-        x = self.dil_conv2d_2(x)
-        x = torch.relu(x)
-        x = self.dil_conv2d_3(x)
-        x = torch.relu(x)
+        # x = self.dil_conv2d_1(x)
+        # x = torch.relu(x)
+        # x = self.dil_conv2d_2(x)
+        # x = torch.relu(x)
+        # x = self.dil_conv2d_3(x)
+        # x = torch.relu(x)
         # => [b x T x 88 x ch]
         x = torch.permute(x, [0, 2, 3, 1])
         x = self.linear_1(x)
         x = torch.relu(x)
         # => [b x T x 88 x 1]
         x = self.linear_2(x)
-        x = torch.relu(x)
+        # x = torch.relu(x)
         # => [b x T x 88]
         x = torch.squeeze(x, dim=3)
         # => [b x T x 768]
         # x = self.linear3(x)
         # x = torch.relu(x)
+        x = torch.sigmoid(x)
         
         return x

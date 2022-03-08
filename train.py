@@ -8,12 +8,14 @@ from sacred.observers import FileStorageObserver
 from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
+import torchaudio
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from evaluate import evaluate
 from onsets_and_frames import *
+
 
 
 ex = Experiment('train_transcriber')
@@ -27,7 +29,7 @@ def config():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 100*1000
     resume_iteration = None
-    checkpoint_interval = 1000
+    checkpoint_interval = 2000
     train_on = 'MAESTRO'
 
     batch_size = 4
@@ -126,9 +128,9 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         for key, value in {'loss': loss, **losses}.items():
             writer.add_scalar(key, value.item(), global_step=i)
 
+        
 
-
-        if(i == 10 or i in [ x * y for y in [100, 1000, 10000, 100000]  for x in [1,2,4,8]] ):
+        if(i in [10, 100, 200, 400, 800] or i % 1000 == 0 ):
             frame_img_pred = torch.swapdims(predictions['frame'], 1, 2)
             frame_img_pred = torch.unsqueeze(frame_img_pred, dim=1)
             frame_img_pred = torchvision.utils.make_grid(frame_img_pred)

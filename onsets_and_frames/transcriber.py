@@ -84,8 +84,8 @@ class OnsetsAndFrames(nn.Module):
             self.frame_stack = nn.Sequential(
                 # ConvStack(input_features, model_size),
                 HarmSpecgramConvBlock(88),
-                nn.Linear(88, output_features),
-                nn.Sigmoid()
+                # nn.Linear(88, output_features),
+                # nn.Sigmoid()
             )
             self.combined_stack = nn.Sequential(
                 # sequence_model(output_features * 2, model_size),
