@@ -17,7 +17,7 @@ class HarmSpecgramConvBlock(nn.Module):
             nn.MaxPool3d(pool_size),
             nn.BatchNorm3d(channel_out),
             )
-    def __init__(self) -> None:
+    def __init__(self, output_bins) -> None:
         super().__init__()
         self.device = DEFAULT_DEVICE
 
@@ -42,7 +42,7 @@ class HarmSpecgramConvBlock(nn.Module):
         self.linear_1 = nn.Linear(64, 32)
         self.linear_2 = nn.Linear(32, 1)
 
-        self.linear3 = nn.Linear(88, 16 * MODEL_COMPLEXITY)
+        self.linear3 = nn.Linear(88, output_bins) # 16 * MODEL_COMPLEXITY
 
 
     def forward(self, waveforms):

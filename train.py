@@ -18,6 +18,8 @@ from onsets_and_frames import *
 ex = Experiment('train_transcriber')
 
 
+
+
 @ex.config
 def config():
     logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S')
@@ -50,14 +52,33 @@ def config():
     ex.observers.append(FileStorageObserver.create(logdir))
 
 
+
+
+ex.main_locals = locals()
+
+
 @ex.automain
 def train(logdir, device, iterations, resume_iteration, checkpoint_interval, train_on, batch_size, sequence_length,
           model_complexity, learning_rate, learning_rate_decay_steps, learning_rate_decay_rate, leave_one_out,
           clip_gradient_norm, validation_length, validation_interval):
     print_config(ex.current_run)
 
+
+
+    # add source files to ex
+    src_file_set = set()
+    src_file_dir = os.path.join(ex.observers[0].dir, 'src')
+    utils.save_src_files(ex.main_locals, src_file_dir, query_str='onsets-and-frames', src_path_set=src_file_set)
+    for src_path in src_file_set:
+        ex.add_source_file(src_path)
+
+
+
+
     os.makedirs(logdir, exist_ok=True)
     writer = SummaryWriter(logdir)
+
+
 
     train_groups, validation_groups = ['train'], ['validation']
 

@@ -5,6 +5,12 @@ import torch
 from PIL import Image
 from torch.nn.modules.module import _addindent
 
+import os
+from posixpath import basename
+import numpy as np
+import inspect
+from shutil import copyfile
+
 
 def cycle(iterable):
     while True:
@@ -78,3 +84,29 @@ def save_pianoroll(path, onsets, frames, onset_threshold=0.5, frame_threshold=0.
     image = Image.fromarray(image, 'RGB')
     image = image.resize((image.size[0], image.size[1] * zoom))
     image.save(path)
+
+
+def save_src_files(elems_dict, dest_dir, query_str = 'pytorch/', src_path_set = set()):
+    for key, x in elems_dict.items():
+        if(inspect.isfunction(x) or inspect.ismodule(x) or inspect.isclass(x)):
+            try:
+                src_path = inspect.getfile(x)
+                rel_path = os.path.relpath(src_path)
+
+                if(rel_path.find(query_str) >= 0 or rel_path.find('../') < 0):
+                    if(rel_path in src_path_set):
+                        continue
+                    src_path_set.add(rel_path)
+
+                    dest_path = os.path.join(dest_dir, rel_path)
+                    abs_dir = os.path.split(dest_path)[0]
+                    os.makedirs(abs_dir, exist_ok=True)
+                    copyfile(src_path, dest_path)
+                    
+                    
+                    print(rel_path)
+                    y = __import__(x.__module__)
+                    new_elem_dict = vars(y)
+                    save_src_files(new_elem_dict, dest_dir, query_str, src_path_set)
+            except:
+                pass
