@@ -42,7 +42,7 @@ class HarmSpecgramConvBlock(nn.Module):
         self.linear_1 = nn.Linear(64, 32)
         self.linear_2 = nn.Linear(32, 1)
 
-        self.linear3 = nn.Linear(88, output_bins) # 16 * MODEL_COMPLEXITY
+        # self.linear3 = nn.Linear(88, output_bins) # 16 * MODEL_COMPLEXITY
 
 
     def forward(self, waveforms):
@@ -83,7 +83,7 @@ class HarmSpecgramConvBlock(nn.Module):
         # => [b x T x 88]
         x = torch.squeeze(x, dim=3)
         # => [b x T x 768]
-        x = self.linear3(x)
-        x = torch.relu(x)
+        # x = self.linear3(x)
+        # x = torch.relu(x)
         
         return x

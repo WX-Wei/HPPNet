@@ -83,13 +83,13 @@ class OnsetsAndFrames(nn.Module):
         if 'frame' in SUB_NETS:
             self.frame_stack = nn.Sequential(
                 # ConvStack(input_features, model_size),
-                HarmSpecgramConvBlock(model_size),
-                nn.Linear(model_size, output_features),
+                HarmSpecgramConvBlock(88),
+                nn.Linear(88, output_features),
                 nn.Sigmoid()
             )
             self.combined_stack = nn.Sequential(
-                sequence_model(output_features * 2, model_size),
-                nn.Linear(model_size, output_features),
+                # sequence_model(output_features * 2, model_size),
+                nn.Linear(output_features, output_features),
                 nn.Sigmoid()
             )
         if 'velocity' in SUB_NETS:
@@ -110,10 +110,10 @@ class OnsetsAndFrames(nn.Module):
         if 'frame' in SUB_NETS:
             activation_pred = self.frame_stack(mel)
             combined_pred = activation_pred
-            if 'onset' in SUB_NETS:
-                combined_pred = torch.cat([onset_pred.detach(), combined_pred], dim=-1)
-            if 'offset' in SUB_NETS:
-                combined_pred = torch.cat([offset_pred.detach(), combined_pred], dim=-1)
+            # if 'onset' in SUB_NETS:
+            #     combined_pred = torch.cat([onset_pred.detach(), combined_pred], dim=-1)
+            # if 'offset' in SUB_NETS:
+            #     combined_pred = torch.cat([offset_pred.detach(), combined_pred], dim=-1)
             frame_pred = self.combined_stack(combined_pred)
             results.append(frame_pred)
         if 'velocity' in SUB_NETS:
@@ -159,7 +159,10 @@ class OnsetsAndFrames(nn.Module):
             idx += 1
         if 'frame' in SUB_NETS:
             predictions['frame'] = results[idx].reshape(*frame_label.shape)
-            losses['loss/frame'] = F.binary_cross_entropy(predictions['frame'], frame_label)
+            y_pred = torch.clip(predictions['frame'], 1e-4, 1 - 1e-4)
+            y_ref = frame_label 
+            losses['loss/frame'] = - 10 * y_ref * torch.log(y_pred) - (1-y_ref)*torch.log(1-y_pred)  # F.binary_cross_entropy(predictions['frame'], frame_label)
+            losses['loss/frame'] = losses['loss/frame'].mean()
             idx += 1
         if 'velocity' in SUB_NETS:
             predictions['velocity'] = results[idx].reshape(*velocity_label.shape)
