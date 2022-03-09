@@ -104,7 +104,7 @@ class HarmSpecgramConvBlock(nn.Module):
         x = torch.squeeze(x, dim=3)
         # => [b x T x 768]
         # x = self.linear3(x)
-        # x = torch.relu(x)
-        x = torch.sigmoid(x)
+        x = torch.relu(x)
+        # x = torch.sigmoid(x)
         
         return x
