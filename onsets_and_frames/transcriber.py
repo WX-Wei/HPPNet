@@ -11,7 +11,7 @@ from torch import nn
 from .lstm import BiLSTM
 from .mel import melspectrogram
 
-from .nets import HarmSpecgramConvBlock
+from .nets import HarmSpecgramConvBlock, HarmSpecgramConvNet
 
 from .constants import *
 
@@ -83,15 +83,16 @@ class OnsetsAndFrames(nn.Module):
         if 'frame' in SUB_NETS:
             self.frame_stack = nn.Sequential(
                 # ConvStack(input_features, model_size),
-                HarmSpecgramConvBlock(88),
-                sequence_model(88 , 88),
+                # HarmSpecgramConvBlock(88),
+                HarmSpecgramConvNet(88),
+                # sequence_model(88 , 88),
                 # nn.Linear(88, 88),
                 # nn.ReLU()
             )
             self.combined_stack = nn.Sequential(
                 # sequence_model(output_features * 2, model_size),
-                nn.Linear(output_features, output_features),
-                nn.Sigmoid()
+                # nn.Linear(output_features, output_features),
+                # nn.Sigmoid()
             )
         if 'velocity' in SUB_NETS:
             self.velocity_stack = nn.Sequential(
@@ -110,13 +111,15 @@ class OnsetsAndFrames(nn.Module):
             results.append(offset_pred)
         if 'frame' in SUB_NETS:
             activation_pred = self.frame_stack(mel)
-            combined_pred = activation_pred
+            results.append(activation_pred)
+            # combined_pred = activation_pred
+
             # if 'onset' in SUB_NETS:
             #     combined_pred = torch.cat([onset_pred.detach(), combined_pred], dim=-1)
             # if 'offset' in SUB_NETS:
             #     combined_pred = torch.cat([offset_pred.detach(), combined_pred], dim=-1)
-            frame_pred = self.combined_stack(combined_pred)
-            results.append(frame_pred)
+            # frame_pred = self.combined_stack(combined_pred)
+            # results.append(frame_pred)
         if 'velocity' in SUB_NETS:
             velocity_pred = self.velocity_stack(mel)
             results.append(velocity_pred)
