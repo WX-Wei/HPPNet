@@ -32,7 +32,7 @@ def config():
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
 
-    batch_size = 4
+    batch_size = 8
     sequence_length = 327680
     model_complexity = constants.MODEL_COMPLEXITY
 

@@ -9,6 +9,8 @@ from .constants import *
 
 from .layers import WaveformToHarmgram
 
+from .lstm import BiLSTM
+
 class HarmSpecgramConvBlock(nn.Module):
     def get_conv3d_block(self, channel_in,channel_out, pool_size = [1, 2, 2]):
         return nn.Sequential( 
@@ -135,7 +137,10 @@ class HarmSpecgramConvNet(nn.Module):
         self.block_3 = self.get_conv3d_block(32, 64, pool_size=[1, 1, 2], dilation=[1, 12, 1])
         self.block_4 = self.get_conv3d_block(64, 64, pool_size=[1, 1, 1], dilation=[1, 12, 1])
         self.block_5 = self.get_conv3d_block(64, 64, kernel_size=[1,3,1], pool_size=[1, 1, 1], dilation=[1, 12, 1])
-        self.block_6 = self.get_conv3d_block(64, 64, kernel_size=[1,3,1], pool_size=[1, 1, 1], dilation=[1, 12, 1])
+        self.block_6 = self.get_conv3d_block(64, 128, kernel_size=[1,3,1], pool_size=[1, 1, 1], dilation=[1, 12, 1])
+
+        self.lstm = BiLSTM(128, 32)
+        self.linear_rnn = nn.Linear(64, 1)
 
 
         self.linear_1 = nn.Linear(64, 32)
@@ -166,18 +171,39 @@ class HarmSpecgramConvNet(nn.Module):
         # => [b x ch x T x 88]
         x = torch.squeeze(x, dim = 4)
 
-        # => [b x T x 88 x ch]
-        x = torch.permute(x, [0, 2, 3, 1])
-        x = self.linear_1(x)
-        x = torch.relu(x)
-        # => [b x T x 88 x 1]
-        x = self.linear_2(x)
+
+        # # => [b x T x 88 x ch]
+        # x = torch.permute(x, [0, 2, 3, 1])
+
+        # x = self.linear_1(x)
         # x = torch.relu(x)
-        # => [b x T x 88]
-        x = torch.squeeze(x, dim=3)
-        # => [b x T x 768]
-        # x = self.linear3(x)
-        # x = torch.relu(x)
+        # # => [b x T x 88 x 1]
+        # x = self.linear_2(x)
+        # # x = torch.relu(x)
+        # # => [b x T x 88]
+        # x = torch.squeeze(x, dim=3)
+        # # => [b x T x 768]
+        # # x = self.linear3(x)
+        # # x = torch.relu(x)
+        # x = torch.sigmoid(x)
+
+        # => [b x 88 x T x ch]
+        x = torch.swapdims(x, 1, 3)
+        s = x.size()
+        # => [(b*88) x T x ch]
+        x = x.reshape(s[0]*s[1], s[2], s[3])
+        # => [(b*88) x T x 64]
+        x = self.lstm(x)
+        # => [(b*88) x T x 1]
+        x = self.linear_rnn(x)
         x = torch.sigmoid(x)
+        # => [b x 88 x T]
+        x = x.reshape(s[0], s[1], s[2])
+        # => [b x T x 88]
+        x = torch.swapdims(x, 1, 2)
+
+        y = x.detach()
+        y 
+
         
         return x
