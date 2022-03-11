@@ -11,7 +11,7 @@ from torch import nn
 from .lstm import BiLSTM
 from .mel import melspectrogram
 
-from .nets import HarmSpecgramConvBlock, HarmSpecgramConvNet
+from .nets import HarmSpecgramConvBlock, HarmSpecgramConvNet, MRCDConvNet
 
 from .constants import *
 
@@ -84,7 +84,8 @@ class OnsetsAndFrames(nn.Module):
             self.frame_stack = nn.Sequential(
                 # ConvStack(input_features, model_size),
                 # HarmSpecgramConvBlock(88),
-                HarmSpecgramConvNet(88),
+                # HarmSpecgramConvNet(88),
+                MRCDConvNet(),
                 # sequence_model(88 , 88),
                 # nn.Linear(88, 88),
                 # nn.ReLU()

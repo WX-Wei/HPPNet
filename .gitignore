@@ -3,4 +3,5 @@ __pycache__
 .idea
 data
 runs
+runs_*
 

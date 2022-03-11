@@ -25,14 +25,14 @@ ex = Experiment('train_transcriber')
 
 @ex.config
 def config():
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S')
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRDConv + BiLSTM"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 100*1000
     resume_iteration = None
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
 
-    batch_size = 8
+    batch_size = 4
     sequence_length = 327680
     model_complexity = constants.MODEL_COMPLEXITY
 
@@ -133,12 +133,12 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         if(i in [10, 100, 200, 400, 800] or i % 1000 == 0 ):
             frame_img_pred = torch.swapdims(predictions['frame'], 1, 2)
             frame_img_pred = torch.unsqueeze(frame_img_pred, dim=1)
-            frame_img_pred = torchvision.utils.make_grid(frame_img_pred)
+            frame_img_pred = torchvision.utils.make_grid(frame_img_pred, pad_value=1)
             writer.add_image('train/step_%d_pred'%i, frame_img_pred)
 
             frame_img_ref = torch.swapdims(batch['frame'], 1, 2)
             frame_img_ref = torch.unsqueeze(frame_img_ref, dim=1)
-            frame_img_ref = torchvision.utils.make_grid(frame_img_ref)
+            frame_img_ref = torchvision.utils.make_grid(frame_img_ref, pad_value=1)
             writer.add_image('train/step_%d_ref'%i, frame_img_ref)
 
         if i % validation_interval == 0:
