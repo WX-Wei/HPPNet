@@ -15,6 +15,8 @@ from .nets import HarmSpecgramConvBlock, HarmSpecgramConvNet, MRCDConvNet
 
 from .constants import *
 
+import nnAudio
+
 
 class ConvStack(nn.Module):
     def __init__(self, input_features, output_features):
@@ -166,8 +168,9 @@ class OnsetsAndFrames(nn.Module):
             predictions['frame'] = results[idx].reshape(*frame_label.shape)
             y_pred = torch.clip(predictions['frame'], 1e-4, 1 - 1e-4)
             y_ref = frame_label 
-            losses['loss/frame'] = - 10 * y_ref * torch.log(y_pred) - (1-y_ref)*torch.log(1-y_pred)  # F.binary_cross_entropy(predictions['frame'], frame_label)
-            losses['loss/frame'] = losses['loss/frame'].mean()
+            # losses['loss/frame'] = - 10 * y_ref * torch.log(y_pred) - (1-y_ref)*torch.log(1-y_pred)  # F.binary_cross_entropy(predictions['frame'], frame_label)
+            # losses['loss/frame'] = losses['loss/frame'].mean()
+            losses['loss/frame'] = F.binary_cross_entropy(predictions['frame'], frame_label)
             idx += 1
         if 'velocity' in SUB_NETS:
             predictions['velocity'] = results[idx].reshape(*velocity_label.shape)
