@@ -25,7 +25,7 @@ ex = Experiment('train_transcriber')
 
 @ex.config
 def config():
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRDConv + BiLSTM"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRDConv + BiLSTM (origin frame loss)"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 100*1000
     resume_iteration = None
