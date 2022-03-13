@@ -220,8 +220,7 @@ class HarmSpecgramConvNet(nn.Module):
         return x
 
 
-e = 2**(1/24)
-to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=WINDOW_LENGTH, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
+
 
 class MRCDConvNet(nn.Module):
     def get_conv2d_block(self, channel_in,channel_out, kernel_size = [1, 3], pool_size = [1, 1], dilation = [1, 1]):
@@ -254,21 +253,18 @@ class MRCDConvNet(nn.Module):
         self.block_6 = self.get_conv2d_block(256, 256, dilation=[1, 12])
 
         self.lstm = BiLSTM(256, 32)
+        self.lstm_onsets = BiLSTM(256, 32)
+        self.lstm_offsets = BiLSTM(256, 32)
         self.linear_rnn = nn.Linear(64, 1)
+        self.linear_rnn_onsets = nn.Linear(64, 1)
+        self.linear_rnn_offsets = nn.Linear(64, 1)
 
-        self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
+        
 
 
-    def forward(self, waveforms):
+    def forward(self, log_gram_db):
         # inputs: [b x (hop_length*T)]
         # outputs: [b x T x 88]
-
-        waveforms = waveforms.to(self.device)
-
-        # => [b x T x 352]
-        log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
-        log_gram_db = self.amplitude_to_db(log_gram_mag)
-
 
 
         img_path = 'logspecgram_preview.png'
@@ -300,6 +296,10 @@ class MRCDConvNet(nn.Module):
         s = x.size()
         # => [(b*88) x T x ch]
         x = x.reshape(s[0]*s[1], s[2], s[3])
+
+        x_0 = x
+
+
         # => [(b*88) x T x 64]
         x = self.lstm(x)
         # => [(b*88) x T x 1]
@@ -309,5 +309,25 @@ class MRCDConvNet(nn.Module):
         x = x.reshape(s[0], s[1], s[2])
         # => [b x T x 88]
         x = torch.swapdims(x, 1, 2)
+
+        # => [(b*88) x T x 64]
+        x_onset = self.lstm_onsets(x_0)
+        # => [(b*88) x T x 1]
+        x_onset = self.linear_rnn_onsets(x_onset)
+        x_onset = torch.sigmoid(x_onset)
+        # => [b x 88 x T]
+        x_onset = x_onset.reshape(s[0], s[1], s[2])
+        # => [b x T x 88]
+        x_onset = torch.swapdims(x_onset, 1, 2)
+
+        # => [(b*88) x T x 64]
+        x_offset = self.lstm_offsets(x_0)
+        # => [(b*88) x T x 1]
+        x_offset = self.linear_rnn_offsets(x_offset)
+        x_offset = torch.sigmoid(x_offset)
+        # => [b x 88 x T]
+        x_offset = x_offset.reshape(s[0], s[1], s[2])
+        # => [b x T x 88]
+        x_offset = torch.swapdims(x_offset, 1, 2)
         
-        return x
+        return x, x_onset, x_offset

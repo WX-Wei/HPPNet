@@ -23,4 +23,4 @@ DEFAULT_DEVICE =  'cuda' if torch.cuda.is_available() else 'cpu'
 
 # SUB_NETS = ['onset', 'offset', 'frame', 'velocity']
 SUB_NETS = ['onset']
-SUB_NETS = ['frame']
+SUB_NETS = ['onset', 'offset', 'frame']
