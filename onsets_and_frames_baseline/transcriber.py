@@ -74,7 +74,7 @@ class OnsetsAndFrames(nn.Module):
             nn.Sigmoid()
         )
         self.combined_stack = nn.Sequential(
-            sequence_model(output_features * 1, model_size),
+            sequence_model(output_features * 3, model_size),
             nn.Linear(model_size, output_features),
             nn.Sigmoid()
         )
@@ -87,8 +87,8 @@ class OnsetsAndFrames(nn.Module):
         onset_pred = self.onset_stack(mel)
         offset_pred = self.offset_stack(mel)
         activation_pred = self.frame_stack(mel)
-        # combined_pred = torch.cat([onset_pred.detach(), offset_pred.detach(), activation_pred], dim=-1)
-        combined_pred = activation_pred
+        combined_pred = torch.cat([onset_pred.detach(), offset_pred.detach(), activation_pred], dim=-1)
+        # combined_pred = activation_pred
         frame_pred = self.combined_stack(combined_pred)
         velocity_pred = self.velocity_stack(mel)
         return onset_pred, offset_pred, activation_pred, frame_pred, velocity_pred

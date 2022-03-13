@@ -237,8 +237,8 @@ class MRCDConvNet(nn.Module):
         self.device = DEFAULT_DEVICE
 
 
-        self.block_1 = self.get_conv2d_block(1, 16)
-        self.block_2 = self.get_conv2d_block(16, 16)
+        self.block_1 = self.get_conv2d_block(1, 16, kernel_size=3)
+        self.block_2 = self.get_conv2d_block(16, 16, kernel_size=3)
 
         self.conv_3_1 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 48])
         self.conv_3_2 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 76])
@@ -277,6 +277,9 @@ class MRCDConvNet(nn.Module):
             # x_grid = torchvision.utils.make_grid(x.swapaxes(0, 1), pad_value=1.0).swapaxes(0, 2).detach().cpu().numpy()
             # plt.imsave(img_path, (x_grid+80)/100)
             plt.imsave(img_path, img)
+
+            time_wise_diff = img[:, 1:] - img[:, :-1]
+            plt.imsave('logspecgram_diff_preview.png', time_wise_diff)
 
         # => [b x 1 x T x 352]
         x = torch.unsqueeze(log_gram_db, dim=1)

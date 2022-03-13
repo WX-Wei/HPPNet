@@ -13,6 +13,8 @@ import torchvision
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+import matplotlib.pyplot as plt
+
 from evaluate import evaluate
 from onsets_and_frames_baseline import *
 
@@ -31,7 +33,7 @@ def config():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 100*1000
     resume_iteration = None
-    checkpoint_interval = 2000
+    checkpoint_interval = 5000
     train_on = 'MAESTRO'
 
     batch_size = 4
@@ -69,7 +71,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     print_config(ex.current_run)
 
 
-
+    
     os.makedirs(logdir, exist_ok=True)
     writer = SummaryWriter(logdir)
 
@@ -125,13 +127,19 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         if(i in [10, 100, 200, 400, 800] or i % 1000 == 0 ):
             frame_img_pred = torch.swapdims(predictions['frame'], 1, 2)
             frame_img_pred = torch.unsqueeze(frame_img_pred, dim=1)
-            frame_img_pred = torchvision.utils.make_grid(frame_img_pred)
-            writer.add_image('train/step_%d_pred'%i, frame_img_pred)
+            # => [F x T]
+            frame_img_pred = torchvision.utils.make_grid(frame_img_pred, pad_value=1)
+            # writer.add_image('train/step_%d_pred'%i, frame_img_pred)
 
             frame_img_ref = torch.swapdims(batch['frame'], 1, 2)
             frame_img_ref = torch.unsqueeze(frame_img_ref, dim=1)
-            frame_img_ref = torchvision.utils.make_grid(frame_img_ref)
-            writer.add_image('train/step_%d_ref'%i, frame_img_ref)
+            frame_img_ref = torchvision.utils.make_grid(frame_img_ref, pad_value=1)
+            # writer.add_image('train/step_%d_ref'%i, frame_img_ref)
+
+            frame_img = torch.cat([frame_img_ref[0], frame_img_pred[0]], dim=0)
+            dir_path = os.path.join(logdir, 'piano_roll')
+            os.makedirs(dir_path, exist_ok=True)
+            plt.imsave(dir_path + '/train_step_%d.png'%(i), frame_img.detach().cpu().numpy())
 
         if i % validation_interval == 0:
             model.eval()
