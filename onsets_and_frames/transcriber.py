@@ -12,11 +12,12 @@ import torchaudio
 from .lstm import BiLSTM
 from .mel import melspectrogram
 
-from .nets import HarmSpecgramConvBlock, HarmSpecgramConvNet, MRCDConvNet
+from .nets import HarmSpecgramConvBlock, HarmSpecgramConvNet, MRDConvNet
 
 from .constants import *
 
 import nnAudio
+
 
 e = 2**(1/24)
 to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=WINDOW_LENGTH, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
@@ -98,7 +99,7 @@ class OnsetsAndFrames(nn.Module):
         #         # sequence_model(model_size, model_size),
         #         # nn.Linear(model_size, output_features),
         #         # nn.Sigmoid()
-        #         MRCDConvNet(),
+        #         MRDConvNet(),
         #     )
         # if 'offset' in SUB_NETS:
         #     self.offset_stack = nn.Sequential(
@@ -106,7 +107,7 @@ class OnsetsAndFrames(nn.Module):
         #         # sequence_model(model_size, model_size),
         #         # nn.Linear(model_size, output_features),
         #         # nn.Sigmoid()
-        #         MRCDConvNet(),
+        #         MRDConvNet(),
         #     )
 
         if 'frame' in SUB_NETS:
@@ -114,22 +115,23 @@ class OnsetsAndFrames(nn.Module):
                 # ConvStack(input_features, model_size),
                 # HarmSpecgramConvBlock(88),
                 # HarmSpecgramConvNet(88),
-                MRCDConvNet(),
+                MRDConvNet(),
                 # sequence_model(88 , 88),
                 # nn.Linear(88, 88),
                 # nn.ReLU()
             )
             self.combined_stack = nn.Sequential(
-                sequence_model(3, 64),
-                nn.Linear(64, 1),
+                sequence_model(3, 8),
+                # sequence_model(8, 8),
+                nn.Linear(8, 1),
                 nn.Sigmoid(),
                 Squeeze(2)
             )
         if 'velocity' in SUB_NETS:
             self.velocity_stack = nn.Sequential(
                 # ConvStack(input_features, model_size),
-                HarmSpecgramConvBlock(48*16),
-                nn.Linear(48*16, output_features)
+                HarmSpecgramConvBlock(model_size),
+                nn.Linear(model_size, output_features)
             )
 
     def forward(self, waveforms):
@@ -151,21 +153,20 @@ class OnsetsAndFrames(nn.Module):
             results.append(offset_pred)
         if 'frame' in SUB_NETS:
             
-            # results.append(activation_pred)
-            combined_pred = torch.unsqueeze(activation_pred, 3)
+            results.append(activation_pred)
 
-            if 'onset' in SUB_NETS:
-                combined_pred = torch.cat([torch.unsqueeze(onset_pred, 3).detach(), combined_pred], dim=-1)
-            if 'offset' in SUB_NETS:
-                combined_pred = torch.cat([torch.unsqueeze(offset_pred, 3).detach(), combined_pred], dim=-1)
-            combined_pred = torch.permute(combined_pred, [0, 2, 1, 3])
-            # => [(b*88) x T x 3]
-            combined_pred = combined_pred.reshape([-1, combined_pred.size()[2], combined_pred.size()[3]])
-        
-            frame_pred = self.combined_stack(combined_pred)
-            frame_pred = torch.reshape(frame_pred, [-1, 88, frame_pred.size()[-1]])
-            frame_pred = torch.permute(frame_pred, [0, 2, 1])
-            results.append(frame_pred)
+            # combined_pred = torch.unsqueeze(activation_pred, 3)
+            # if 'onset' in SUB_NETS:
+            #     combined_pred = torch.cat([torch.unsqueeze(onset_pred, 3).detach(), combined_pred], dim=-1)
+            # if 'offset' in SUB_NETS:
+            #     combined_pred = torch.cat([torch.unsqueeze(offset_pred, 3).detach(), combined_pred], dim=-1)
+            # combined_pred = torch.permute(combined_pred, [0, 2, 1, 3])
+            # # => [(b*88) x T x 3]
+            # combined_pred = combined_pred.reshape([-1, combined_pred.size()[2], combined_pred.size()[3]])
+            # frame_pred = self.combined_stack(combined_pred)
+            # frame_pred = torch.reshape(frame_pred, [-1, 88, frame_pred.size()[-1]])
+            # frame_pred = torch.permute(frame_pred, [0, 2, 1])
+            # results.append(frame_pred)
         if 'velocity' in SUB_NETS:
             velocity_pred = self.velocity_stack(log_gram_db)
             results.append(velocity_pred)
