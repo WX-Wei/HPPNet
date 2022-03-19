@@ -21,6 +21,8 @@ import nnAudio
 
 e = 2**(1/24)
 to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=WINDOW_LENGTH, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
+# nnAudio.Spectrogram.CQT(sr=22050, hop_length=512, fmin=32.7, fmax=None, n_bins=84, bins_per_octave=12, filter_scale=1, norm=1, window='hann', center=True, pad_mode='reflect', trainable=False, output_format='Magnitude', verbose=True)
+to_cqt = nnAudio.Spectrogram.CQT(sr=SAMPLE_RATE, hop_length=HOP_LENGTH, fmin=27.5/e, n_bins=88*4, bins_per_octave=BINS_PER_SEMITONE*12, output_format='Magnitude').to(DEFAULT_DEVICE)
 
 class Reshape(nn.Module):
     def __init__(self, *args):
@@ -139,10 +141,11 @@ class OnsetsAndFrames(nn.Module):
         waveforms = waveforms.to(DEFAULT_DEVICE)
 
         # => [b x T x 352]
-        log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
-        log_gram_db = self.amplitude_to_db(log_gram_mag)
+        # log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
+        cqt = to_cqt(waveforms).swapaxes(1, 2).float()[:, :640, :]
+        spgcgram_db = self.amplitude_to_db(cqt*cqt)
 
-        activation_pred, onset_pred, offset_pred = self.frame_stack(log_gram_db)
+        activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(spgcgram_db)
 
         results = []
         if 'onset' in SUB_NETS:
@@ -168,7 +171,7 @@ class OnsetsAndFrames(nn.Module):
             # frame_pred = torch.permute(frame_pred, [0, 2, 1])
             # results.append(frame_pred)
         if 'velocity' in SUB_NETS:
-            velocity_pred = self.velocity_stack(log_gram_db)
+            # velocity_pred = self.velocity_stack(log_gram_db)
             results.append(velocity_pred)
         # return onset_pred, offset_pred, activation_pred, frame_pred, velocity_pred
         return results

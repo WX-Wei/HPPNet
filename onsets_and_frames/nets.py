@@ -318,6 +318,8 @@ class MRDConvNet(nn.Module):
         self.lstm = BiLSTM(128, lstm_size//2)
         self.lstm_onsets = BiLSTM(128, lstm_size//2)
         self.lstm_offsets = BiLSTM(128, lstm_size//2)
+        self.lstm_velocity = BiLSTM(128, lstm_size//2)
+
         self.linear_rnn = nn.Linear(lstm_size, 1)
         self.linear_rnn_onsets = nn.Linear(lstm_size, 1)
         self.linear_rnn_offsets = nn.Linear(lstm_size, 1)
@@ -325,6 +327,8 @@ class MRDConvNet(nn.Module):
         self.TCW_lstm_frame_low = TimeChannelWiseLSTM(128, 1, 64)
         self.TCW_lstm_frame_mid = TimeChannelWiseLSTM(128, 1, 64)
         self.TCW_lstm_frame_high = TimeChannelWiseLSTM(128, 1, 64)
+
+        self.conv_velocity = nn.Conv2d(128, 1, 1)
 
         
 
@@ -365,6 +369,13 @@ class MRDConvNet(nn.Module):
         x = self.block_5(x)
         # => [b x ch x T x 88]
         x = self.block_6(x)
+
+        # => [b x 1 x T x 88]
+        x_velocity = self.conv_velocity(x)
+        x_velocity = torch.relu(x_velocity)
+        # => [b x T x 88]
+        x_velocity = torch.unsqueeze(x_velocity, dim=1)
+
 
         # x_onset = self.TCW_lstm_onset(x)
         # x_onset = torch.squeeze(x_onset, dim=1)
@@ -419,4 +430,4 @@ class MRDConvNet(nn.Module):
         # => [b x T x 88]
         x_offset = torch.swapdims(x_offset, 1, 2)
         
-        return x_frame, x_onset, x_offset
+        return x_frame, x_onset, x_offset, x_velocity

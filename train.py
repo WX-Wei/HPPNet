@@ -26,7 +26,7 @@ ex = Experiment('train_transcriber')
 
 @ex.config
 def config():
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv + BiLSTM (no combined_stack, conv_block_6 channel=128, freq -> low,mid,high, input add specgram delta)"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv + BiLSTM (no combined_stack, conv_block_6 channel=128, freq -> low,mid,high, input add specgram delta, use CQT)"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 100*1000
     resume_iteration = None
