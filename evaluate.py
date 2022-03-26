@@ -17,10 +17,17 @@ from onsets_and_frames import *
 eps = sys.float_info.epsilon
 
 
-def evaluate(data, model, onset_threshold=0.5, frame_threshold=0.5, save_path=None):
+def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None):
     metrics = defaultdict(list)
 
     for label in data:
+
+        label['audio'] = label['audio'][0].to(device) # use [0] to unbach
+        label['onset'] = label['onset'][0].to(device)
+        label['offset'] = label['offset'][0].to(device)
+        label['frame'] = label['frame'][0].to(device)
+        label['velocity'] = label['velocity'][0].to(device)
+
         pred, losses = model.run_on_batch(label)
 
         for key, loss in losses.items():

@@ -6,10 +6,19 @@ from glob import glob
 import numpy as np
 import soundfile
 from torch.utils.data import Dataset
+import torch
 from tqdm import tqdm
+
+
+import h5py
+import librosa
 
 from .constants import *
 from .midi import parse_midi
+
+
+
+os.environ['HDF5_USE_FILE_LOCKING'] = "FALSE"
 
 
 class PianoRollAudioDataset(Dataset):
@@ -28,31 +37,37 @@ class PianoRollAudioDataset(Dataset):
                 self.data.append(self.load(*input_files))
 
     def __getitem__(self, index):
-        data = self.data[index]
-        result = dict(path=data['path'])
+        h5_path = self.data[index]
+        with h5py.File(h5_path, 'r') as data:
+            result = dict(path=data['path'][()])
 
-        if self.sequence_length is not None:
-            audio_length = len(data['audio'])
-            step_begin = self.random.randint(audio_length - self.sequence_length) // HOP_LENGTH
-            n_steps = self.sequence_length // HOP_LENGTH
-            step_end = step_begin + n_steps
+            if self.sequence_length is not None:
+                audio_length = data['audio'].shape[0] # len(data['audio'])
+                step_begin = self.random.randint(audio_length - self.sequence_length) // HOP_LENGTH
+                n_steps = self.sequence_length // HOP_LENGTH
+                step_end = step_begin + n_steps
 
-            begin = step_begin * HOP_LENGTH
-            end = begin + self.sequence_length
+                begin = step_begin * HOP_LENGTH
+                end = begin + self.sequence_length
 
-            result['audio'] = data['audio'][begin:end].to(self.device)
-            result['label'] = data['label'][step_begin:step_end, :].to(self.device)
-            result['velocity'] = data['velocity'][step_begin:step_end, :].to(self.device)
-        else:
-            result['audio'] = data['audio'].to(self.device)
-            result['label'] = data['label'].to(self.device)
-            result['velocity'] = data['velocity'].to(self.device).float()
+                result['audio'] = data['audio'][begin:end]
+                result['label'] = data['label'][step_begin:step_end, :]
+                result['velocity'] = data['velocity'][step_begin:step_end, :]
+            else:
+                result['audio'] = data['audio'][:]
+                result['label'] = data['label'][:]
+                result['velocity'] = data['velocity'][:]
 
-        result['audio'] = result['audio'].float().div_(32768.0)
-        result['onset'] = (result['label'] == 3).float()
-        result['offset'] = (result['label'] == 1).float()
-        result['frame'] = (result['label'] > 1).float()
-        result['velocity'] = result['velocity'].float().div_(128.0)
+            result['audio'] = torch.tensor(result['audio'])
+            result['label'] = torch.tensor(result['label'])
+            result['velocity'] = torch.tensor(result['velocity'])
+
+
+            result['audio'] = result['audio'].float().div_(32768.0)
+            result['onset'] = (result['label'] == 3).float()
+            result['offset'] = (result['label'] == 1).float()
+            result['frame'] = (result['label'] > 1).float()
+            result['velocity'] = result['velocity'].float().div_(128.0)
 
         return result
 
@@ -91,41 +106,49 @@ class PianoRollAudioDataset(Dataset):
             velocity: torch.ByteTensor, shape = [num_steps, midi_bins]
                 a matrix that contains MIDI velocity values at the frame locations
         """
-        saved_data_path = audio_path.replace('.flac', '.pt').replace('.wav', '.pt')
-        if os.path.exists(saved_data_path):
-            return torch.load(saved_data_path)
 
-        audio, sr = soundfile.read(audio_path, dtype='int16')
-        assert sr == SAMPLE_RATE
+        h5_path = audio_path.replace('.flac', '.h5').replace('.wav', '.h5')
+        if os.path.exists(h5_path):
+            return h5_path
 
-        audio = torch.ShortTensor(audio)
-        audio_length = len(audio)
 
-        n_keys = MAX_MIDI - MIN_MIDI + 1
-        n_steps = (audio_length - 1) // HOP_LENGTH + 1
+        with h5py.File(h5_path, mode='w') as h5:                
+            audio, sr = soundfile.read(audio_path, dtype='int16')
+            assert sr == SAMPLE_RATE
 
-        label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
-        velocity = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
+            audio = torch.ShortTensor(audio)
+            audio_length = len(audio)
 
-        tsv_path = tsv_path
-        midi = np.loadtxt(tsv_path, delimiter='\t', skiprows=1)
+            n_keys = MAX_MIDI - MIN_MIDI + 1
+            n_steps = (audio_length - 1) // HOP_LENGTH + 1
 
-        for onset, offset, note, vel in midi:
-            left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
-            onset_right = min(n_steps, left + HOPS_IN_ONSET)
-            frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
-            frame_right = min(n_steps, frame_right)
-            offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
+            label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
+            velocity = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
 
-            f = int(note) - MIN_MIDI
-            label[left:onset_right, f] = 3
-            label[onset_right:frame_right, f] = 2
-            label[frame_right:offset_right, f] = 1
-            velocity[left:frame_right, f] = vel
+            tsv_path = tsv_path
+            midi = np.loadtxt(tsv_path, delimiter='\t', skiprows=1)
 
-        data = dict(path=audio_path, audio=audio, label=label, velocity=velocity)
-        torch.save(data, saved_data_path)
-        return data
+            for onset, offset, note, vel in midi:
+                left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
+                onset_right = min(n_steps, left + HOPS_IN_ONSET)
+                frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
+                frame_right = min(n_steps, frame_right)
+                offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
+
+                f = int(note) - MIN_MIDI
+                label[left:onset_right, f] = 3
+                label[onset_right:frame_right, f] = 2
+                label[frame_right:offset_right, f] = 1
+                velocity[left:frame_right, f] = vel
+
+            # data = dict(path=audio_path, audio=audio, label=label, velocity=velocity)
+            h5['path'] = audio_path
+            h5['audio'] = audio.numpy()
+            h5['label'] = label.numpy()
+            h5['velocity'] = velocity.numpy()
+            # torch.save(data, saved_data_path)
+        # return data
+        return h5_path
 
 
 class MAESTRO(PianoRollAudioDataset):

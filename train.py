@@ -26,9 +26,9 @@ ex = Experiment('train_transcriber')
 
 @ex.config
 def config():
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv + BiLSTM (no combined_stack, conv_block_6 channel=128, freq -> low,mid,high, input add specgram delta, use CQT)"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BiLSTM[freq->LMH,CQT+delta,full_maestro]"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    iterations = 100*1000
+    iterations = 500*1000
     resume_iteration = None
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
@@ -51,7 +51,7 @@ def config():
     clip_gradient_norm = 3
 
     validation_length = sequence_length
-    validation_interval = 100
+    validation_interval = 500
 
     ex.observers.append(FileStorageObserver.create(logdir))
 
@@ -98,7 +98,11 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         dataset = MAPS(groups=['AkPnBcht', 'AkPnBsdf', 'AkPnCGdD', 'AkPnStgb', 'SptkBGAm', 'SptkBGCl', 'StbgTGd2'], sequence_length=sequence_length)
         validation_dataset = MAPS(groups=['ENSTDkAm', 'ENSTDkCl'], sequence_length=validation_length)
 
-    loader = DataLoader(dataset, batch_size, shuffle=True, drop_last=True)
+    loader = DataLoader(dataset, batch_size, shuffle=True, drop_last=True, num_workers=4)
+
+    validation_dataset = DataLoader(validation_dataset, num_workers=4)
+
+
 
     if resume_iteration is None:
         model = OnsetsAndFrames(N_MELS, MAX_MIDI - MIN_MIDI + 1, model_complexity).to(device)
@@ -115,6 +119,15 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     loop = tqdm(range(resume_iteration + 1, iterations + 1))
     for i, batch in zip(loop, cycle(loader)):
+
+        batch['audio'] = batch['audio'].to(device)
+        batch['onset'] = batch['onset'].to(device)
+        batch['offset'] = batch['offset'].to(device)
+        batch['frame'] = batch['frame'].to(device)
+        batch['velocity'] = batch['velocity'].to(device)
+
+
+
         predictions, losses = model.run_on_batch(batch)
 
         loss = sum(losses.values())
@@ -151,7 +164,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         if i % validation_interval == 0:
             model.eval()
             with torch.no_grad():
-                for key, value in evaluate(validation_dataset, model).items():
+                for key, value in evaluate(validation_dataset, model, device).items():
                     writer.add_scalar('validation/' + key.replace(' ', '_'), np.mean(value), global_step=i)
             model.train()
 
