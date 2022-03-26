@@ -318,7 +318,7 @@ class MRDConvNet(nn.Module):
         self.lstm = BiLSTM(128, lstm_size//2)
         self.lstm_onsets = BiLSTM(128, lstm_size//2)
         self.lstm_offsets = BiLSTM(128, lstm_size//2)
-        self.lstm_velocity = BiLSTM(128, lstm_size//2)
+        # self.lstm_velocity = BiLSTM(128, lstm_size//2)
 
         self.linear_rnn = nn.Linear(lstm_size, 1)
         self.linear_rnn_onsets = nn.Linear(lstm_size, 1)
