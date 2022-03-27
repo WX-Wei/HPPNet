@@ -11,8 +11,8 @@ from mir_eval.util import midi_to_hz
 from scipy.stats import hmean
 from tqdm import tqdm
 
-import onsets_and_frames.dataset as dataset_module
-from onsets_and_frames import *
+import onsets_and_frames_baseline.dataset as dataset_module
+from onsets_and_frames_baseline import *
 
 eps = sys.float_info.epsilon
 
@@ -21,18 +21,6 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
     metrics = defaultdict(list)
 
     for label in data:
-
-        if(len(label['audio']) <= 1): # when test on long audio
-            n_step =  label['onset'].shape[0]
-            max_step = 12000
-            
-            if(n_step > max_step):
-                print('n_step > max_step %d '%max_step, label['audio'].shape, label['onset'].shape)
-                label['audio'] = label['audio'][:HOP_LENGTH*max_step]
-                label['onset'] = label['onset'][:max_step]
-                label['offset'] = label['offset'][:max_step]
-                label['frame'] = label['frame'][:max_step]
-                label['velocity'] = label['velocity'][:max_step]
 
         label['audio'] = label['audio'].to(device) # use [0] to unbach
         label['onset'] = label['onset'].to(device)
@@ -125,14 +113,15 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
     for key, values in metrics.items():
         if key.startswith('metric/'):
             _, category, name = key.split('/')
-            print(f'{category:>32} {name:25}: {np.mean(values):.3f} ± {np.std(values):.3f}')
+            f = open('MRDConv_LSTM_maps.txt', 'a')
+            print(f'{category:>32} {name:25}: {np.mean(values):.3f} ± {np.std(values):.3f}', file=f)
 
-
+#sftp://fd-lamt-02@10.177.55.66/home/fd-lamt-02/vvx/onsets-and-frames-master/runs/transcriber-220325-140515_baseline_full_maestro/model-265000.pt
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('model_file', type=str)
-    parser.add_argument('dataset', nargs='?', default='MAPS')
-    parser.add_argument('dataset_group', nargs='?', default=None)
+    parser.add_argument('--model_file', default='runs/transcriber-220325-140515_baseline_full_maestro/model-220000.pt', type=str)
+    parser.add_argument('dataset', nargs='?', default='MAPS') # MAPS MAESTRO
+    parser.add_argument('dataset_group', nargs='?', default=None) # 'test'
     parser.add_argument('--save-path', default=None)
     parser.add_argument('--sequence-length', default=None, type=int)
     parser.add_argument('--onset-threshold', default=0.5, type=float)
