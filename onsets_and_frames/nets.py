@@ -295,7 +295,7 @@ class MRDConvNet(nn.Module):
         self.device = DEFAULT_DEVICE
 
 
-        self.block_1 = self.get_conv2d_block(2, 16, kernel_size=3)
+        self.block_1 = self.get_conv2d_block(1, 16, kernel_size=3)
         self.block_2 = self.get_conv2d_block(16, 16, kernel_size=3)
 
         # self.block_3 = MRDC_Conv(16, 64, dilation_list=[48, 76, 96, 111, 124, 135, 144, 152, 159, 166])
@@ -348,15 +348,15 @@ class MRDConvNet(nn.Module):
             time_wise_diff = img[:, 1:] - img[:, :-1]
             plt.imsave('logspecgram_diff_preview.png', time_wise_diff)
 
-        log_gram_db_delta = log_gram_db + 0
-        log_gram_db_delta[:, 1:, :] = log_gram_db_delta[:, 1:, :] - log_gram_db_delta[:, :-1, :]
-        log_gram_db_delta = torch.unsqueeze(log_gram_db_delta, dim=1)
+        # log_gram_db_delta = log_gram_db + 0
+        # log_gram_db_delta[:, 1:, :] = log_gram_db_delta[:, 1:, :] - log_gram_db_delta[:, :-1, :]
+        # log_gram_db_delta = torch.unsqueeze(log_gram_db_delta, dim=1)
 
 
         # => [b x 1 x T x 352]
         x = torch.unsqueeze(log_gram_db, dim=1)
         # => [b x 2 x T x 352]
-        x = torch.cat([x, log_gram_db_delta], dim=1)
+        # x = torch.cat([x, log_gram_db_delta], dim=1)
 
         x = self.block_1(x)
         x = self.block_2(x)
@@ -370,11 +370,11 @@ class MRDConvNet(nn.Module):
         # => [b x ch x T x 88]
         x = self.block_6(x)
 
-        # => [b x 1 x T x 88]
-        x_velocity = self.conv_velocity(x)
-        x_velocity = torch.relu(x_velocity)
-        # => [b x T x 88]
-        x_velocity = torch.unsqueeze(x_velocity, dim=1)
+        # # => [b x 1 x T x 88]
+        # x_velocity = self.conv_velocity(x)
+        # x_velocity = torch.relu(x_velocity)
+        # # => [b x T x 88]
+        # x_velocity = torch.unsqueeze(x_velocity, dim=1)
 
 
         # x_onset = self.TCW_lstm_onset(x)
@@ -391,13 +391,13 @@ class MRDConvNet(nn.Module):
 
         # x_frame = torch.squeeze(x_frame, dim=1)
 
-        # => [b x 88 x T x ch]
-        x = torch.swapdims(x, 1, 3)
-        s = x.size()
-        # => [(b*88) x T x ch]
-        x = x.reshape(s[0]*s[1], s[2], s[3])
+        # # => [b x 88 x T x ch]
+        # x = torch.swapdims(x, 1, 3)
+        # s = x.size()
+        # # => [(b*88) x T x ch]
+        # x = x.reshape(s[0]*s[1], s[2], s[3])
 
-        x_0 = x
+        # x_0 = x
 
 
         # # => [(b*88) x T x 64]
@@ -410,24 +410,24 @@ class MRDConvNet(nn.Module):
         # # => [b x T x 88]
         # x_frame = torch.swapdims(x, 1, 2)
 
-        # => [(b*88) x T x 64]
-        x_onset = self.lstm_onsets(x_0)
-        # => [(b*88) x T x 1]
-        x_onset = self.linear_rnn_onsets(x_onset)
-        x_onset = torch.sigmoid(x_onset)
-        # => [b x 88 x T]
-        x_onset = x_onset.reshape(s[0], s[1], s[2])
-        # => [b x T x 88]
-        x_onset = torch.swapdims(x_onset, 1, 2)
+        # # => [(b*88) x T x 64]
+        # x_onset = self.lstm_onsets(x_0)
+        # # => [(b*88) x T x 1]
+        # x_onset = self.linear_rnn_onsets(x_onset)
+        # x_onset = torch.sigmoid(x_onset)
+        # # => [b x 88 x T]
+        # x_onset = x_onset.reshape(s[0], s[1], s[2])
+        # # => [b x T x 88]
+        # x_onset = torch.swapdims(x_onset, 1, 2)
 
-        # => [(b*88) x T x 64]
-        x_offset = self.lstm_offsets(x_0)
-        # => [(b*88) x T x 1]
-        x_offset = self.linear_rnn_offsets(x_offset)
-        x_offset = torch.sigmoid(x_offset)
-        # => [b x 88 x T]
-        x_offset = x_offset.reshape(s[0], s[1], s[2])
-        # => [b x T x 88]
-        x_offset = torch.swapdims(x_offset, 1, 2)
+        # # => [(b*88) x T x 64]
+        # x_offset = self.lstm_offsets(x_0)
+        # # => [(b*88) x T x 1]
+        # x_offset = self.linear_rnn_offsets(x_offset)
+        # x_offset = torch.sigmoid(x_offset)
+        # # => [b x 88 x T]
+        # x_offset = x_offset.reshape(s[0], s[1], s[2])
+        # # => [b x T x 88]
+        # x_offset = torch.swapdims(x_offset, 1, 2)
         
-        return x_frame, x_onset, x_offset, x_velocity
+        return x_frame #, x_onset, x_offset, x_velocity

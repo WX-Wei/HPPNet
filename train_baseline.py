@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
-from evaluate import evaluate
+from evaluate_baseline import evaluate
 from onsets_and_frames_baseline import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -29,11 +29,11 @@ ex = Experiment('train_transcriber')
 
 @ex.config
 def config():
-    # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_baseline_full_maestro"
-    logdir = 'runs/transcriber-220325-140515_baseline_full_maestro'
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_baseline_full_maestro"
+    # logdir = 'runs/transcriber-220325-140515_baseline_full_maestro'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    iterations = 500*1000
-    resume_iteration = 135*1000
+    iterations = 300*1000
+    resume_iteration = None # 0 # 135*1000
     checkpoint_interval = 5000
     train_on = 'MAESTRO'
 
@@ -55,7 +55,7 @@ def config():
     clip_gradient_norm = 3
 
     validation_length = sequence_length
-    validation_interval = 500
+    validation_interval = 400
 
     ex.observers.append(FileStorageObserver.create(logdir))
 

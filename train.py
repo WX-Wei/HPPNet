@@ -26,7 +26,7 @@ ex = Experiment('train_transcriber')
 
 @ex.config
 def config():
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BiLSTM[freq->LMH,CQT+delta,full_maestro]"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRCD-Conv_BiLSTM[freq->LMH,CQT,full_maestro,on_off_vel_use_baseline]"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 500*1000
     resume_iteration = None
@@ -51,7 +51,7 @@ def config():
     clip_gradient_norm = 3
 
     validation_length = sequence_length
-    validation_interval = 500
+    validation_interval = 400
 
     ex.observers.append(FileStorageObserver.create(logdir))
 
@@ -100,7 +100,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     loader = DataLoader(dataset, batch_size, shuffle=True, drop_last=True, num_workers=4)
 
-    validation_dataset = DataLoader(validation_dataset, num_workers=4)
+    # validation_dataset = DataLoader(validation_dataset, num_workers=4)
 
 
 

@@ -95,22 +95,22 @@ class OnsetsAndFrames(nn.Module):
 
         self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
 
-        # if 'onset' in SUB_NETS:
-        #     self.onset_stack = nn.Sequential(
-        #         # ConvStack(input_features, model_size),
-        #         # sequence_model(model_size, model_size),
-        #         # nn.Linear(model_size, output_features),
-        #         # nn.Sigmoid()
-        #         MRDConvNet(),
-        #     )
-        # if 'offset' in SUB_NETS:
-        #     self.offset_stack = nn.Sequential(
-        #         # ConvStack(input_features, model_size),
-        #         # sequence_model(model_size, model_size),
-        #         # nn.Linear(model_size, output_features),
-        #         # nn.Sigmoid()
-        #         MRDConvNet(),
-        #     )
+        if 'onset' in SUB_NETS:
+            self.onset_stack = nn.Sequential(
+                ConvStack(input_features, model_size),
+                sequence_model(model_size, model_size),
+                nn.Linear(model_size, output_features),
+                nn.Sigmoid()
+                # MRDConvNet(),
+            )
+        if 'offset' in SUB_NETS:
+            self.offset_stack = nn.Sequential(
+                ConvStack(input_features, model_size),
+                sequence_model(model_size, model_size),
+                nn.Linear(model_size, output_features),
+                nn.Sigmoid()
+                # MRDConvNet(),
+            )
 
         if 'frame' in SUB_NETS:
             self.frame_stack = nn.Sequential(
@@ -131,8 +131,8 @@ class OnsetsAndFrames(nn.Module):
             )
         if 'velocity' in SUB_NETS:
             self.velocity_stack = nn.Sequential(
-                # ConvStack(input_features, model_size),
-                HarmSpecgramConvBlock(model_size),
+                ConvStack(input_features, model_size),
+                # HarmSpecgramConvBlock(model_size),
                 nn.Linear(model_size, output_features)
             )
 
@@ -140,19 +140,23 @@ class OnsetsAndFrames(nn.Module):
 
         waveforms = waveforms.to(DEFAULT_DEVICE)
 
+
+        # => [n_mel x T] => [T x n_mel]
+        mel = melspectrogram(waveforms).transpose(-1, -2)[:, :self.frame_num, :]
+
         # => [b x T x 352]
         # log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
         cqt = to_cqt(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
         spgcgram_db = self.amplitude_to_db(cqt)
 
-        activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(spgcgram_db)
+        activation_pred = self.frame_stack(spgcgram_db)
 
         results = []
         if 'onset' in SUB_NETS:
-            # onset_pred = self.onset_stack(log_gram_db)
+            onset_pred = self.onset_stack(mel)
             results.append(onset_pred)
         if 'offset' in SUB_NETS:
-            # offset_pred = self.offset_stack(log_gram_db)
+            offset_pred = self.offset_stack(mel)
             results.append(offset_pred)
         if 'frame' in SUB_NETS:
             
@@ -171,7 +175,7 @@ class OnsetsAndFrames(nn.Module):
             frame_pred = torch.permute(frame_pred, [0, 2, 1])
             results.append(frame_pred)
         if 'velocity' in SUB_NETS:
-            # velocity_pred = self.velocity_stack(log_gram_db)
+            velocity_pred = self.velocity_stack(mel)
             results.append(velocity_pred)
         # return onset_pred, offset_pred, activation_pred, frame_pred, velocity_pred
         return results
@@ -191,12 +195,9 @@ class OnsetsAndFrames(nn.Module):
 
         # => [T x (88*4) x 16]
 
-
-        mel = audio_label_reshape
-
         # => [T x 88]
         # onset_pred, offset_pred, _, frame_pred, velocity_pred = self(mel)
-        results = self(mel)
+        results = self(audio_label_reshape)
         idx = 0
         predictions = {
             'onset': torch.clip(onset_label, 0, 0),

@@ -17,7 +17,7 @@ WINDOW_LENGTH = 2048
 
 N_HAR = 8
 BINS_PER_SEMITONE = 4
-MODEL_COMPLEXITY = 48 # 12 # model_complexity
+MODEL_COMPLEXITY = 24 # 12 # model_complexity
 
 DEFAULT_DEVICE =  'cuda' if torch.cuda.is_available() else 'cpu'
 
