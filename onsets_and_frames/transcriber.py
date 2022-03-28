@@ -14,6 +14,8 @@ from .mel import melspectrogram
 
 from .nets import HarmSpecgramConvBlock, HarmSpecgramConvNet, MRDConvNet
 
+from .ChromaNet import ChromaNet
+
 from .constants import *
 
 import nnAudio
@@ -22,7 +24,7 @@ import nnAudio
 e = 2**(1/24)
 to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=WINDOW_LENGTH, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
 # nnAudio.Spectrogram.CQT(sr=22050, hop_length=512, fmin=32.7, fmax=None, n_bins=84, bins_per_octave=12, filter_scale=1, norm=1, window='hann', center=True, pad_mode='reflect', trainable=False, output_format='Magnitude', verbose=True)
-to_cqt = nnAudio.Spectrogram.CQT(sr=SAMPLE_RATE, hop_length=HOP_LENGTH, fmin=27.5/e, n_bins=88*4, bins_per_octave=BINS_PER_SEMITONE*12, output_format='Magnitude').to(DEFAULT_DEVICE)
+to_cqt = nnAudio.Spectrogram.CQT(sr=SAMPLE_RATE, hop_length=HOP_LENGTH, fmin=27.5/e, n_bins=96*4, bins_per_octave=BINS_PER_SEMITONE*12, output_format='Magnitude').to(DEFAULT_DEVICE)
 
 class Reshape(nn.Module):
     def __init__(self, *args):
@@ -117,7 +119,11 @@ class OnsetsAndFrames(nn.Module):
                 # ConvStack(input_features, model_size),
                 # HarmSpecgramConvBlock(88),
                 # HarmSpecgramConvNet(88),
-                MRDConvNet(),
+
+                # MRDConvNet(),
+
+                ChromaNet(),
+
                 # sequence_model(88 , 88),
                 # nn.Linear(88, 88),
                 # nn.ReLU()

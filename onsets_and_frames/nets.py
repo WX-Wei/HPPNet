@@ -282,13 +282,22 @@ class TimeChannelWiseLSTM(nn.Module):
 
 
 class MRDConvNet(nn.Module):
-    def get_conv2d_block(self, channel_in,channel_out, kernel_size = [1, 3], pool_size = [1, 1], dilation = [1, 1]):
-        return nn.Sequential( 
-            nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
-            nn.ReLU(),
-            nn.MaxPool2d(pool_size),
-            nn.BatchNorm2d(channel_out),
-        )
+    def get_conv2d_block(self, channel_in,channel_out, kernel_size = [1, 3], pool_size = None, dilation = [1, 1]):
+        if(pool_size == None):
+            return nn.Sequential( 
+                nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
+                nn.ReLU(),
+                # nn.BatchNorm2d(channel_out),
+                nn.InstanceNorm2d(channel_out)
+            )
+        else:
+            return nn.Sequential( 
+                nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
+                nn.ReLU(),
+                nn.MaxPool2d(pool_size),
+                # nn.BatchNorm2d(channel_out),
+                nn.InstanceNorm2d(channel_out)
+            )
 
     def __init__(self) -> None:
         super().__init__()
@@ -309,8 +318,8 @@ class MRDConvNet(nn.Module):
         self.conv_3_7 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 144])
         self.conv_3_8 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 152])
 
-        self.block_4 = self.get_conv2d_block(64, 128, pool_size=[1, 2], dilation=[1, 24])
-        self.block_5 = self.get_conv2d_block(128, 128, pool_size=[1, 2], dilation=[1, 12])
+        self.block_4 = self.get_conv2d_block(64, 128, pool_size=[1, 2], dilation=[1, 48])
+        self.block_5 = self.get_conv2d_block(128, 128, pool_size=[1, 2], dilation=[1, 24])
         self.block_6 = self.get_conv2d_block(128, 128, dilation=[1, 12])
 
         lstm_size = 64

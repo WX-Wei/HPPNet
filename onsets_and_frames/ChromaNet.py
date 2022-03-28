@@ -83,13 +83,68 @@ class TimeChannelWiseLSTM(nn.Module):
 
 
 class ChromaNet(nn.Module):
+    def get_conv2d_block(self, channel_in,channel_out, kernel_size = [1, 3], pool_size = [1, 1], dilation = [1, 1]):
+        return nn.Sequential( 
+            nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
+            nn.ReLU(),
+            nn.MaxPool2d(pool_size),
+            nn.BatchNorm2d(channel_out),
+        )
     def __init__(self) -> None:
         super().__init__()
+
+        self.block_1 = self.get_conv2d_block(1, 8, kernel_size=3)
+        self.block_2 = self.get_conv2d_block(8, 32, kernel_size=3)
+
+        self.block_3 = nn.Sequential(
+            self.get_conv2d_block(32, 128, kernel_size=1),
+            self.get_conv2d_block(128, 64, kernel_size=1),
+            self.get_conv2d_block(64, 32, kernel_size=1),
+            self.get_conv2d_block(32, 16, kernel_size=1),
+            self.get_conv2d_block(16, 8, kernel_size=1),
+        )
+
+        self.linear = nn.Linear(88, 88)
 
     def forward(self, x):
         # inputs: [b x T x n_freq]
         # outputs: [b x T x 88]
-        pass
+
+        # => [b x 1 x T x 384]
+        x = torch.unsqueeze(x, dim=1)
+
+        x = self.block_1(x)
+        # => [b x 32 x T x 384]
+        x = self.block_2(x)
+
+        a = [0, 76, 111, 135]
+        b = [0, 12, 24, 36, 48, 60, 72, 84]
+        note_lst = [i * 4 + 1 for i in range(12)]
+        for note_0 in note_lst:
+            har_list = set()
+            for i in b:
+                for j in a:
+                    key = i*4+j + note_0
+                    if(key <= b[-1]*4 + note_0):
+                        har_list.add(key)
+
+            har_list = list(har_list)
+            har_list.sort()
+            x[:,:,:, note_0] = torch.sum(x[:,:,:,har_list], dim=3)
+        # => [b x C x T x 12]
+        x = x[:, :, :, note_lst]
+        # => [b x 8 x T x 12]
+        x = self.block_3(x)
+        x = torch.permute(x, [0, 2, 1, 3])
+        # => [b x T x 96]
+        x = torch.reshape(x, [x.size()[0], x.size()[1], 8*12])
+        # => [b x T x 88]
+        x = x[:, :, :88]
+
+        x = self.linear(x)
+        x = torch.sigmoid(x)
+
+        return x
 
 
 
