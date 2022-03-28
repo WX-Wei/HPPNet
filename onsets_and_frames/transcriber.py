@@ -24,7 +24,7 @@ import nnAudio
 e = 2**(1/24)
 to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=WINDOW_LENGTH, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
 # nnAudio.Spectrogram.CQT(sr=22050, hop_length=512, fmin=32.7, fmax=None, n_bins=84, bins_per_octave=12, filter_scale=1, norm=1, window='hann', center=True, pad_mode='reflect', trainable=False, output_format='Magnitude', verbose=True)
-to_cqt = nnAudio.Spectrogram.CQT(sr=SAMPLE_RATE, hop_length=HOP_LENGTH, fmin=27.5/e, n_bins=96*4, bins_per_octave=BINS_PER_SEMITONE*12, output_format='Magnitude').to(DEFAULT_DEVICE)
+to_cqt = nnAudio.Spectrogram.CQT(sr=SAMPLE_RATE, hop_length=HOP_LENGTH, fmin=27.5/e, n_bins=88*4, bins_per_octave=BINS_PER_SEMITONE*12, output_format='Magnitude').to(DEFAULT_DEVICE)
 
 class Reshape(nn.Module):
     def __init__(self, *args):
@@ -97,22 +97,22 @@ class OnsetsAndFrames(nn.Module):
 
         self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
 
-        if 'onset' in SUB_NETS:
-            self.onset_stack = nn.Sequential(
-                ConvStack(input_features, model_size),
-                sequence_model(model_size, model_size),
-                nn.Linear(model_size, output_features),
-                nn.Sigmoid()
-                # MRDConvNet(),
-            )
-        if 'offset' in SUB_NETS:
-            self.offset_stack = nn.Sequential(
-                ConvStack(input_features, model_size),
-                sequence_model(model_size, model_size),
-                nn.Linear(model_size, output_features),
-                nn.Sigmoid()
-                # MRDConvNet(),
-            )
+        # if 'onset' in SUB_NETS:
+        #     self.onset_stack = nn.Sequential(
+        #         ConvStack(input_features, model_size),
+        #         sequence_model(model_size, model_size),
+        #         nn.Linear(model_size, output_features),
+        #         nn.Sigmoid()
+        #         # MRDConvNet(),
+        #     )
+        # if 'offset' in SUB_NETS:
+        #     self.offset_stack = nn.Sequential(
+        #         ConvStack(input_features, model_size),
+        #         sequence_model(model_size, model_size),
+        #         nn.Linear(model_size, output_features),
+        #         nn.Sigmoid()
+        #         # MRDConvNet(),
+        #     )
 
         if 'frame' in SUB_NETS:
             self.frame_stack = nn.Sequential(
@@ -120,27 +120,27 @@ class OnsetsAndFrames(nn.Module):
                 # HarmSpecgramConvBlock(88),
                 # HarmSpecgramConvNet(88),
 
-                # MRDConvNet(),
+                MRDConvNet(),
 
-                ChromaNet(),
+                # ChromaNet(),
 
                 # sequence_model(88 , 88),
                 # nn.Linear(88, 88),
                 # nn.ReLU()
             )
-            self.combined_stack = nn.Sequential(
-                sequence_model(3, 8),
-                # sequence_model(8, 8),
-                nn.Linear(8, 1),
-                nn.Sigmoid(),
-                Squeeze(2)
-            )
-        if 'velocity' in SUB_NETS:
-            self.velocity_stack = nn.Sequential(
-                ConvStack(input_features, model_size),
-                # HarmSpecgramConvBlock(model_size),
-                nn.Linear(model_size, output_features)
-            )
+            # self.combined_stack = nn.Sequential(
+            #     sequence_model(3, 8),
+            #     # sequence_model(8, 8),
+            #     nn.Linear(8, 1),
+            #     nn.Sigmoid(),
+            #     Squeeze(2)
+            # )
+        # if 'velocity' in SUB_NETS:
+        #     self.velocity_stack = nn.Sequential(
+        #         ConvStack(input_features, model_size),
+        #         # HarmSpecgramConvBlock(model_size),
+        #         nn.Linear(model_size, output_features)
+        #     )
 
     def forward(self, waveforms):
 
@@ -155,33 +155,33 @@ class OnsetsAndFrames(nn.Module):
         cqt = to_cqt(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
         spgcgram_db = self.amplitude_to_db(cqt)
 
-        activation_pred = self.frame_stack(spgcgram_db)
+        activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(spgcgram_db)
 
         results = []
         if 'onset' in SUB_NETS:
-            onset_pred = self.onset_stack(mel)
+            # onset_pred = self.onset_stack(mel)
             results.append(onset_pred)
         if 'offset' in SUB_NETS:
-            offset_pred = self.offset_stack(mel)
+            # offset_pred = self.offset_stack(mel)
             results.append(offset_pred)
         if 'frame' in SUB_NETS:
             
-            # results.append(activation_pred)
+            results.append(activation_pred)
 
-            combined_pred = torch.unsqueeze(activation_pred, 3)
-            if 'onset' in SUB_NETS:
-                combined_pred = torch.cat([torch.unsqueeze(onset_pred, 3).detach(), combined_pred], dim=-1)
-            if 'offset' in SUB_NETS:
-                combined_pred = torch.cat([torch.unsqueeze(offset_pred, 3).detach(), combined_pred], dim=-1)
-            combined_pred = torch.permute(combined_pred, [0, 2, 1, 3])
-            # => [(b*88) x T x 3]
-            combined_pred = combined_pred.reshape([-1, combined_pred.size()[2], combined_pred.size()[3]])
-            frame_pred = self.combined_stack(combined_pred)
-            frame_pred = torch.reshape(frame_pred, [-1, 88, frame_pred.size()[-1]])
-            frame_pred = torch.permute(frame_pred, [0, 2, 1])
-            results.append(frame_pred)
+            # combined_pred = torch.unsqueeze(activation_pred, 3)
+            # if 'onset' in SUB_NETS:
+            #     combined_pred = torch.cat([torch.unsqueeze(onset_pred, 3).detach(), combined_pred], dim=-1)
+            # if 'offset' in SUB_NETS:
+            #     combined_pred = torch.cat([torch.unsqueeze(offset_pred, 3).detach(), combined_pred], dim=-1)
+            # combined_pred = torch.permute(combined_pred, [0, 2, 1, 3])
+            # # => [(b*88) x T x 3]
+            # combined_pred = combined_pred.reshape([-1, combined_pred.size()[2], combined_pred.size()[3]])
+            # frame_pred = self.combined_stack(combined_pred)
+            # frame_pred = torch.reshape(frame_pred, [-1, 88, frame_pred.size()[-1]])
+            # frame_pred = torch.permute(frame_pred, [0, 2, 1])
+            # results.append(frame_pred)
         if 'velocity' in SUB_NETS:
-            velocity_pred = self.velocity_stack(mel)
+            # velocity_pred = self.velocity_stack(mel)
             results.append(velocity_pred)
         # return onset_pred, offset_pred, activation_pred, frame_pred, velocity_pred
         return results
