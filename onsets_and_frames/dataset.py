@@ -9,6 +9,8 @@ from torch.utils.data import Dataset
 import torch
 from tqdm import tqdm
 
+import torch.utils.data
+
 
 import h5py
 import librosa
@@ -125,21 +127,23 @@ class PianoRollAudioDataset(Dataset):
             label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
             velocity = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
 
-            tsv_path = tsv_path
-            midi = np.loadtxt(tsv_path, delimiter='\t', skiprows=1)
 
-            for onset, offset, note, vel in midi:
-                left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
-                onset_right = min(n_steps, left + HOPS_IN_ONSET)
-                frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
-                frame_right = min(n_steps, frame_right)
-                offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
+            if(len(tsv_path) > 0):
+                tsv_path = tsv_path
+                midi = np.loadtxt(tsv_path, delimiter='\t', skiprows=1)
 
-                f = int(note) - MIN_MIDI
-                label[left:onset_right, f] = 3
-                label[onset_right:frame_right, f] = 2
-                label[frame_right:offset_right, f] = 1
-                velocity[left:frame_right, f] = vel
+                for onset, offset, note, vel in midi:
+                    left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
+                    onset_right = min(n_steps, left + HOPS_IN_ONSET)
+                    frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
+                    frame_right = min(n_steps, frame_right)
+                    offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
+
+                    f = int(note) - MIN_MIDI
+                    label[left:onset_right, f] = 3
+                    label[onset_right:frame_right, f] = 2
+                    label[frame_right:offset_right, f] = 1
+                    velocity[left:frame_right, f] = vel
 
             # data = dict(path=audio_path, audio=audio, label=label, velocity=velocity)
             h5['path'] = audio_path
@@ -204,3 +208,22 @@ class MAPS(PianoRollAudioDataset):
         assert(all(os.path.isfile(tsv) for tsv in tsvs))
 
         return sorted(zip(flacs, tsvs))
+
+
+# class NotLabeledDataset(PianoRollAudioDataset):
+#     def __init__(self, path='data/NotLabeled', groups=['all'], sequence_length=None, seed=42, device=DEFAULT_DEVICE):
+#         super().__init__(path, groups, sequence_length, seed, device)
+
+#     @classmethod
+#     def available_groups(cls):
+#         return ['all']
+
+#     def files(self, group):
+#         audios = glob(os.path.join(self.path, '*.flac')) + glob(os.path.join(self.path, '*.wav')) + glob(os.path.join(self.path, '*.mp3'))
+#         tsvs = ['' for f in audios]
+
+#         assert(all(os.path.isfile(flac) for flac in audios))
+
+#         return sorted(zip(audios, tsvs))
+
+
