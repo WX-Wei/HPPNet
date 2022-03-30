@@ -10,6 +10,9 @@ from mir_eval.transcription_velocity import precision_recall_f1_overlap as evalu
 from mir_eval.util import midi_to_hz
 from scipy.stats import hmean
 from tqdm import tqdm
+from datetime import datetime
+
+from torch.utils.data import Subset 
 
 import onsets_and_frames.dataset as dataset_module
 from onsets_and_frames import *
@@ -22,7 +25,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
 
     for label in data:
 
-        if(len(label['audio']) <= 1): # when test on long audio
+        if(len(label['audio'].size()) <= 1): # when test on long audio
             n_step =  label['onset'].shape[0]
             max_step = 12000
             
@@ -117,15 +120,30 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
         kwargs['groups'] = [dataset_group]
     dataset = dataset_class(**kwargs)
 
+    dataset = Subset(dataset, list(range(50)))
+
     model = torch.load(model_file, map_location=device).eval()
     summary(model)
 
     metrics = evaluate(tqdm(dataset), model, device, onset_threshold, frame_threshold, save_path)
 
+    
+
+    res = '\n' + model_file +   '\n' + datetime.now().strftime('%y%m%d-%H%M%S') + '\n\nMetrics:\n'
+    res += 'evaluate dataset and group:' + str(dataset) + ', ' + str(dataset_group) + '\n'
+    res += 'onset and frame threshold: %f, %f'%(onset_threshold, frame_threshold) + '\n'
+
+
     for key, values in metrics.items():
         if key.startswith('metric/'):
             _, category, name = key.split('/')
-            print(f'{category:>32} {name:25}: {np.mean(values):.3f} ± {np.std(values):.3f}')
+            res += '\n' + f'{category:>32} {name:25}: {np.mean(values):.3f} ± {np.std(values):.3f}'
+            print(res)
+
+    if(save_path != None):
+        result_path = os.path.join(save_path, 'metrics_result.txt')
+        with open(result_path, 'a') as f:
+            f.write(res)
 
 
 if __name__ == '__main__':

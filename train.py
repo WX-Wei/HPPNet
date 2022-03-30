@@ -27,7 +27,7 @@ ex = Experiment('train_transcriber')
 @ex.config
 def config():
     # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRCD-Conv_BiLSTM[freq->LMH,CQT,full_maestro,on_off_vel_use_baseline]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[no_combined_stack_instance_norm_freq->LMH,CQT,full_maestro]"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[combine_all_res_connect_freq->LMH,CQT,full_maestro]"
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 500*1000
@@ -150,12 +150,12 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             frame_img_pred = torch.swapdims(predictions['frame'], 1, 2)
             frame_img_pred = torch.unsqueeze(frame_img_pred, dim=1)
             # => [F x T]
-            frame_img_pred = torchvision.utils.make_grid(frame_img_pred, pad_value=1)
+            frame_img_pred = torchvision.utils.make_grid(frame_img_pred, pad_value=0.5)
             # writer.add_image('train/step_%d_pred'%i, frame_img_pred)
 
             frame_img_ref = torch.swapdims(batch['frame'], 1, 2)
             frame_img_ref = torch.unsqueeze(frame_img_ref, dim=1)
-            frame_img_ref = torchvision.utils.make_grid(frame_img_ref, pad_value=1)
+            frame_img_ref = torchvision.utils.make_grid(frame_img_ref, pad_value=0.5)
             # writer.add_image('train/step_%d_ref'%i, frame_img_ref)
 
             frame_img = torch.cat([frame_img_ref[0], frame_img_pred[0]], dim=0)
