@@ -287,16 +287,17 @@ class MRDConvNet(nn.Module):
             return nn.Sequential( 
                 nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
                 nn.ReLU(),
-                # nn.BatchNorm2d(channel_out),
-                nn.InstanceNorm2d(channel_out)
+                nn.BatchNorm2d(channel_out),
+                # nn.InstanceNorm2d(channel_out),
+                
             )
         else:
             return nn.Sequential( 
                 nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
                 nn.ReLU(),
                 nn.MaxPool2d(pool_size),
-                # nn.BatchNorm2d(channel_out),
-                nn.InstanceNorm2d(channel_out)
+                nn.BatchNorm2d(channel_out),
+                # nn.InstanceNorm2d(channel_out)
             )
 
     def __init__(self) -> None:
@@ -307,37 +308,41 @@ class MRDConvNet(nn.Module):
         self.block_1 = self.get_conv2d_block(1, 16, kernel_size=3)
         self.block_2 = self.get_conv2d_block(16, 16, kernel_size=3)
 
+        c3_out = 128
+
         # self.block_3 = MRDC_Conv(16, 64, dilation_list=[48, 76, 96, 111, 124, 135, 144, 152, 159, 166])
 
-        self.conv_3_1 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 48])
-        self.conv_3_2 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 76])
-        self.conv_3_3 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 96])
-        self.conv_3_4 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 111])
-        self.conv_3_5 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 124])
-        self.conv_3_6 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 135])
-        self.conv_3_7 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 144])
-        self.conv_3_8 = nn.Conv2d(16, 64, [1, 3], padding='same', dilation=[1, 152])
+        self.conv_3_1 = nn.Conv2d(16, c3_out, [1, 3], padding='same', dilation=[1, 48])
+        self.conv_3_2 = nn.Conv2d(16, c3_out, [1, 3], padding='same', dilation=[1, 76])
+        self.conv_3_3 = nn.Conv2d(16, c3_out, [1, 3], padding='same', dilation=[1, 96])
+        self.conv_3_4 = nn.Conv2d(16, c3_out, [1, 3], padding='same', dilation=[1, 111])
+        self.conv_3_5 = nn.Conv2d(16, c3_out, [1, 3], padding='same', dilation=[1, 124])
+        self.conv_3_6 = nn.Conv2d(16, c3_out, [1, 3], padding='same', dilation=[1, 135])
+        self.conv_3_7 = nn.Conv2d(16, c3_out, [1, 3], padding='same', dilation=[1, 144])
+        self.conv_3_8 = nn.Conv2d(16, c3_out, [1, 3], padding='same', dilation=[1, 152])
 
-        self.block_4 = self.get_conv2d_block(64, 64, pool_size=[1, 2], dilation=[1, 48])
-        self.block_5 = self.get_conv2d_block(64, 128, pool_size=[1, 2], dilation=[1, 24])
-        self.block_6 = self.get_conv2d_block(128, 128, dilation=[1, 12])
+        self.block_4 = self.get_conv2d_block(c3_out, c3_out, pool_size=[1, 4], dilation=[1, 48])
+        self.block_5 = self.get_conv2d_block(c3_out, c3_out, dilation=[1, 12])
+        self.block_6 = self.get_conv2d_block(c3_out, c3_out, 1)
+        self.block_7 = self.get_conv2d_block(c3_out, c3_out, 1)
+        self.block_8 = self.get_conv2d_block(c3_out, c3_out, 1)
 
-        lstm_size = 64
+        lstm_size = 128
 
-        self.lstm = BiLSTM(128, lstm_size//2)
-        self.lstm_onsets = BiLSTM(128, lstm_size//2)
-        self.lstm_offsets = BiLSTM(128, lstm_size//2)
-        # self.lstm_velocity = BiLSTM(128, lstm_size//2)
+        self.lstm = BiLSTM(c3_out, lstm_size//2)
+        self.lstm_onsets = BiLSTM(c3_out, lstm_size//2)
+        self.lstm_offsets = BiLSTM(c3_out, lstm_size//2)
+        # self.lstm_velocity = BiLSTM(c3_out, lstm_size//2)
 
         self.linear_rnn = nn.Linear(lstm_size, 1)
         self.linear_rnn_onsets = nn.Linear(lstm_size, 1)
         self.linear_rnn_offsets = nn.Linear(lstm_size, 1)
 
-        self.TCW_lstm_frame_low = TimeChannelWiseLSTM(128, 1, 64)
-        self.TCW_lstm_frame_mid = TimeChannelWiseLSTM(128, 1, 64)
-        self.TCW_lstm_frame_high = TimeChannelWiseLSTM(128, 1, 64)
+        self.TCW_lstm_frame_low = TimeChannelWiseLSTM(c3_out, 1, 64)
+        self.TCW_lstm_frame_mid = TimeChannelWiseLSTM(c3_out, 1, 64)
+        self.TCW_lstm_frame_high = TimeChannelWiseLSTM(c3_out, 1, 64)
 
-        self.conv_velocity = nn.Conv2d(128, 1, 1)
+        self.conv_velocity = nn.Conv2d(c3_out, 1, 1)
 
         
 
@@ -377,13 +382,15 @@ class MRDConvNet(nn.Module):
         x = self.block_4(x)
         x = self.block_5(x)
         # => [b x ch x T x 88]
-        x = self.block_6(x)
+        x = self.block_6(x) + x
+        x = self.block_7(x) + x
+        x = self.block_8(x) + x
 
         # => [b x 1 x T x 88]
         x_velocity = self.conv_velocity(x)
         x_velocity = torch.relu(x_velocity)
         # => [b x T x 88]
-        x_velocity = torch.unsqueeze(x_velocity, dim=1)
+        x_velocity = torch.squeeze(x_velocity, dim=1)
 
 
         # x_onset = self.TCW_lstm_onset(x)
