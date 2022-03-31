@@ -86,6 +86,29 @@ def save_pianoroll(path, onsets, frames, onset_threshold=0.5, frame_threshold=0.
     image.save(path)
 
 
+def save_pianoroll_overlap(path, frames_label, frames_pred, frame_threshold=0.5, zoom=4):
+    """
+    Saves a piano roll diagram
+    overlap lable and pred frames together.
+
+    Parameters
+    ----------
+    path: str
+    onsets: torch.FloatTensor, shape = [frames, bins]
+    frames: torch.FloatTensor, shape = [frames, bins]
+    onset_threshold: float
+    frame_threshold: float
+    zoom: int
+    """
+    frames_label = (1 - frames_label.t().to(torch.uint8)).cpu()
+    frames_pred = (1-(frames_pred.t() > frame_threshold).to(torch.uint8)).cpu()
+    both = frames_label - frames_label + 1
+    image = torch.stack([frames_label, frames_pred, both], dim=2).flip(0).mul(255).numpy()
+    image = Image.fromarray(image, 'RGB')
+    image = image.resize((image.size[0], image.size[1] * zoom))
+    image.save(path)
+
+
 def save_src_files(elems_dict, dest_dir, query_str = 'pytorch/', src_path_set = set()):
     for key, x in elems_dict.items():
         if(inspect.isfunction(x) or inspect.ismodule(x) or inspect.isclass(x)):
