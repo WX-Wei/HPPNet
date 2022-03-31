@@ -43,7 +43,20 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         label['frame'] = label['frame'].to(device)
         label['velocity'] = label['velocity'].to(device)
 
-        pred, losses = model.run_on_batch(label)
+        if(save_path == None):
+            pred, losses = model.run_on_batch(label)
+        else:
+            os.makedirs(save_path, exist_ok=True)
+            pred_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.pt')
+            loss_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.loss.pt')
+
+            if(os.path.exists(pred_path) and os.path.exists(loss_path)):
+                pred = torch.load(pred_path)
+                losses = torch.load(loss_path)
+            else:
+                pred, losses = model.run_on_batch(label)
+                torch.save(pred, pred_path)
+                torch.save(losses, loss_path)
 
         for key, loss in losses.items():
             metrics[key].append(loss.item())
@@ -51,6 +64,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         for key, value in pred.items():
             value.squeeze_(0).relu_()
 
+        # pitch, interval, velocity
         p_ref, i_ref, v_ref = extract_notes(label['onset'], label['frame'], label['velocity'])
         p_est, i_est, v_est = extract_notes(pred['onset'], pred['frame'], pred['velocity'], onset_threshold, frame_threshold)
 
@@ -114,6 +128,10 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
 
 def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path,
                   onset_threshold, frame_threshold, device):
+
+    if(save_path == 'default'):
+        save_path = os.path.join(model_file[:-3] + "_evaluate", dataset, dataset_group)
+
     dataset_class = getattr(dataset_module, dataset)
     kwargs = {'sequence_length': sequence_length, 'device': device}
     if dataset_group is not None:
