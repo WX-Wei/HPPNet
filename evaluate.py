@@ -11,6 +11,7 @@ from mir_eval.util import midi_to_hz
 from scipy.stats import hmean
 from tqdm import tqdm
 from datetime import datetime
+import h5py
 
 from torch.utils.data import Subset 
 
@@ -20,7 +21,7 @@ from onsets_and_frames import *
 eps = sys.float_info.epsilon
 
 
-def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None):
+def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None, save_metrics_only=False):
     metrics = defaultdict(list)
 
     for label in data:
@@ -32,12 +33,16 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         label['velocity'] = label['velocity'].to(device)
 
         os.makedirs(save_path, exist_ok=True)
-        pred_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.pt')
-        loss_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.loss.pt')
+        pred_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.h5')
 
-        if(os.path.exists(pred_path) and os.path.exists(loss_path)):
-            pred = torch.load(pred_path)
-            losses = torch.load(loss_path)
+        if(os.path.exists(pred_path)):
+            pred = {'onset':None, 'offset':None, 'frame':None, 'velocity': None}
+            losses = {'loss/onset': None, 'loss/offset': None, 'loss/frame': None, 'loss/velocity':None}
+            with h5py.File(pred_path, 'r') as h5:
+                for key in pred:
+                    pred[key] = torch.tensor(h5[key][:]).to(device)
+                for key in losses:
+                    losses[key] = torch.tensor(h5[key][()]).to(device)
         else:
             n_step =  label['onset'].shape[-2]
             clip_len = 12000
@@ -79,8 +84,12 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
                         else:
                             losses[key] = loss * clip / n_step
                     begin += clip
-            torch.save(pred, pred_path)
-            torch.save(losses, loss_path)
+
+            with h5py.File(pred_path, 'w') as h5:
+                for key, item in pred.items():
+                    h5[key] = item.cpu().numpy()
+                for key, item in losses.items():
+                    h5[key] = item.cpu().numpy()
 
         for key, loss in losses.items():
             metrics[key].append(loss.item())
@@ -138,7 +147,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         for key, loss in frame_metrics.items():
             metrics['metric/frame/' + key.lower().replace(' ', '_')].append(loss)
 
-        if save_path is not None:
+        if save_path is not None and save_metrics_only==False:
             os.makedirs(save_path, exist_ok=True)
             label_path = os.path.join(save_path, os.path.basename(label['path']) + '.label.png')
             save_pianoroll(label_path, label['onset'], label['frame'], onset_threshold, frame_threshold, zoom=1)
@@ -170,7 +179,7 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
     model = torch.load(model_file, map_location=device).eval()
     summary(model)
 
-    metrics = evaluate(tqdm(dataset), model, device, onset_threshold, frame_threshold, save_path)
+    metrics = evaluate(tqdm(dataset), model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=True)
 
     
 
