@@ -352,15 +352,15 @@ class MRDConvNet(nn.Module):
         # outputs: [b x T x 88]
 
 
-        img_path = 'logspecgram_preview.png'
-        if not os.path.exists(img_path):
-            img = torch.permute(log_gram_db, [2, 0, 1]).reshape([352, 640*4]).detach().cpu().numpy()
-            # x_grid = torchvision.utils.make_grid(x.swapaxes(0, 1), pad_value=1.0).swapaxes(0, 2).detach().cpu().numpy()
-            # plt.imsave(img_path, (x_grid+80)/100)
-            plt.imsave(img_path, img)
+        # img_path = 'logspecgram_preview.png'
+        # if not os.path.exists(img_path):
+        #     img = torch.permute(log_gram_db, [2, 0, 1]).reshape([352, 640*4]).detach().cpu().numpy()
+        #     # x_grid = torchvision.utils.make_grid(x.swapaxes(0, 1), pad_value=1.0).swapaxes(0, 2).detach().cpu().numpy()
+        #     # plt.imsave(img_path, (x_grid+80)/100)
+        #     plt.imsave(img_path, img)
 
-            time_wise_diff = img[:, 1:] - img[:, :-1]
-            plt.imsave('logspecgram_diff_preview.png', time_wise_diff)
+        #     time_wise_diff = img[:, 1:] - img[:, :-1]
+        #     plt.imsave('logspecgram_diff_preview.png', time_wise_diff)
 
         # log_gram_db_delta = log_gram_db + 0
         # log_gram_db_delta[:, 1:, :] = log_gram_db_delta[:, 1:, :] - log_gram_db_delta[:, :-1, :]

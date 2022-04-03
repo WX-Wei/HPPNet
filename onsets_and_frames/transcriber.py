@@ -166,24 +166,24 @@ class OnsetsAndFrames(nn.Module):
             results.append(offset_pred)
         if 'frame' in SUB_NETS:
             
-            # results.append(activation_pred)
+            results.append(activation_pred)
 
         
-            combined_pred = torch.unsqueeze(activation_pred, 3)
-            if 'onset' in SUB_NETS:
-                combined_pred = torch.cat([torch.unsqueeze(onset_pred, 3).detach(), combined_pred], dim=-1)
-            if 'offset' in SUB_NETS:
-                combined_pred = torch.cat([torch.unsqueeze(offset_pred, 3).detach(), combined_pred], dim=-1)
-            if 'velocity' in SUB_NETS:
-                # print(velocity_pred.size(), combined_pred.size())
-                combined_pred = torch.cat([torch.unsqueeze(velocity_pred, 3).detach(), combined_pred], dim=-1)
-            combined_pred = torch.permute(combined_pred, [0, 2, 1, 3])
-            # => [(b*88) x T x 3]
-            combined_pred = combined_pred.reshape([-1, combined_pred.size()[2], combined_pred.size()[3]])
-            frame_pred = self.combined_stack(combined_pred)
-            frame_pred = torch.reshape(frame_pred, [-1, 88, frame_pred.size()[-1]])
-            frame_pred = torch.permute(frame_pred, [0, 2, 1])
-            results.append(frame_pred)
+            # combined_pred = torch.unsqueeze(activation_pred, 3)
+            # if 'onset' in SUB_NETS:
+            #     combined_pred = torch.cat([torch.unsqueeze(onset_pred, 3).detach(), combined_pred], dim=-1)
+            # if 'offset' in SUB_NETS:
+            #     combined_pred = torch.cat([torch.unsqueeze(offset_pred, 3).detach(), combined_pred], dim=-1)
+            # if 'velocity' in SUB_NETS:
+            #     # print(velocity_pred.size(), combined_pred.size())
+            #     combined_pred = torch.cat([torch.unsqueeze(velocity_pred, 3).detach(), combined_pred], dim=-1)
+            # combined_pred = torch.permute(combined_pred, [0, 2, 1, 3])
+            # # => [(b*88) x T x 3]
+            # combined_pred = combined_pred.reshape([-1, combined_pred.size()[2], combined_pred.size()[3]])
+            # frame_pred = self.combined_stack(combined_pred)
+            # frame_pred = torch.reshape(frame_pred, [-1, 88, frame_pred.size()[-1]])
+            # frame_pred = torch.permute(frame_pred, [0, 2, 1])
+            # results.append(frame_pred)
         if 'velocity' in SUB_NETS:
             # velocity_pred = self.velocity_stack(mel)
             results.append(velocity_pred)

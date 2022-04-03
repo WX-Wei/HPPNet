@@ -32,10 +32,11 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         label['frame'] = label['frame'].to(device)
         label['velocity'] = label['velocity'].to(device)
 
-        os.makedirs(save_path, exist_ok=True)
-        pred_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.h5')
-
-        if(os.path.exists(pred_path)):
+        if(not save_path is None):
+            os.makedirs(save_path, exist_ok=True)
+            pred_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.h5')
+        # load previous pred
+        if(not save_path is None and os.path.exists(pred_path)):
             pred = {'onset':None, 'offset':None, 'frame':None, 'velocity': None}
             losses = {'loss/onset': None, 'loss/offset': None, 'loss/frame': None, 'loss/velocity':None}
             with h5py.File(pred_path, 'r') as h5:
@@ -43,11 +44,15 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
                     pred[key] = torch.tensor(h5[key][:]).to(device)
                 for key in losses:
                     losses[key] = torch.tensor(h5[key][()]).to(device)
+        # get new pred
         else:
             n_step =  label['onset'].shape[-2]
-            clip_len = 12000
+            clip_len = 10000
+            # 
             if(len(label['audio'].size()) > 1 or n_step <= clip_len):
-                pred, losses = model.run_on_batch(label)
+                torch.cuda.empty_cache()
+                with torch.no_grad():
+                    pred, losses = model.run_on_batch(label)
             # clip audio to fixed length to prevent out of memory.
             else: # when test on long audio
                 print('n_step > clip_len %d '%clip_len, label['audio'].shape, label['onset'].shape)
@@ -70,7 +75,9 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
                     label_i['offset'] = label['offset'][begin:end]
                     label_i['frame'] = label['frame'][begin:end]
                     label_i['velocity'] = label['velocity'][begin:end]
-                    pred_i, losses_i = model.run_on_batch(label_i)
+                    torch.cuda.empty_cache()
+                    with torch.no_grad():
+                        pred_i, losses_i = model.run_on_batch(label_i)
 
                     for key, item in pred_i.items():
                         if(key in pred):
@@ -84,12 +91,13 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
                         else:
                             losses[key] = loss * clip / n_step
                     begin += clip
-
-            with h5py.File(pred_path, 'w') as h5:
-                for key, item in pred.items():
-                    h5[key] = item.cpu().numpy()
-                for key, item in losses.items():
-                    h5[key] = item.cpu().numpy()
+            # save pred
+            if(not save_path is None):
+                with h5py.File(pred_path, 'w') as h5:
+                    for key, item in pred.items():
+                        h5[key] = item.cpu().numpy()
+                    for key, item in losses.items():
+                        h5[key] = item.cpu().numpy()
 
         for key, loss in losses.items():
             metrics[key].append(loss.item())
@@ -165,8 +173,9 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
 def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path,
                   onset_threshold, frame_threshold, device):
 
-    if(save_path == 'default'):
-        save_path = os.path.join(model_file[:-3] + "_evaluate", dataset, dataset_group)
+    if(save_path == None):
+        group_str = dataset_group if dataset_group is not None else 'default'
+        save_path = os.path.join(model_file[:-3] + "_evaluate", dataset, group_str)
 
     dataset_class = getattr(dataset_module, dataset)
     kwargs = {'sequence_length': sequence_length, 'device': device}
@@ -179,7 +188,7 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
     model = torch.load(model_file, map_location=device).eval()
     summary(model)
 
-    metrics = evaluate(tqdm(dataset), model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=True)
+    metrics = evaluate(tqdm(dataset), model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=False)
 
     
 
@@ -208,7 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('--save-path', default=None)
     parser.add_argument('--sequence-length', default=None, type=int)
     parser.add_argument('--onset-threshold', default=0.3, type=float)
-    parser.add_argument('--frame-threshold', default=0.5, type=float)
+    parser.add_argument('--frame-threshold', default=0.3, type=float)
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
 
     with torch.no_grad():

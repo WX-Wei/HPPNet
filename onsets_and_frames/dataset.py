@@ -109,13 +109,14 @@ class PianoRollAudioDataset(Dataset):
                 a matrix that contains MIDI velocity values at the frame locations
         """
 
-        h5_path = audio_path.replace('.flac', '.h5').replace('.wav', '.h5')
+        h5_path = audio_path.replace('.flac', '.h5').replace('.wav', '.h5').replace('.mp3', '.h5')
         if os.path.exists(h5_path):
             return h5_path
 
 
         with h5py.File(h5_path, mode='w') as h5:                
             audio, sr = soundfile.read(audio_path, dtype='int16')
+            # audio, sr = librosa.load(audio_path, sr = SAMPLE_RATE, mono=True)
             assert sr == SAMPLE_RATE
 
             audio = torch.ShortTensor(audio)
@@ -202,7 +203,9 @@ class MAPS(PianoRollAudioDataset):
 
     def files(self, group):
         flacs = glob(os.path.join(self.path, 'flac', '*_%s.flac' % group))
-        tsvs = [f.replace('/flac/', '/tsv/matched/').replace('.flac', '.tsv') for f in flacs]
+        # tsvs = [f.replace('/flac/', '/tsv/matched/').replace('.flac', '.tsv') for f in flacs]
+        tsvs = [f.replace('/flac/', '/midi/').replace('.flac', '.tsv') for f in flacs]
+
 
         assert(all(os.path.isfile(flac) for flac in flacs))
         assert(all(os.path.isfile(tsv) for tsv in tsvs))
@@ -210,20 +213,21 @@ class MAPS(PianoRollAudioDataset):
         return sorted(zip(flacs, tsvs))
 
 
-# class NotLabeledDataset(PianoRollAudioDataset):
-#     def __init__(self, path='data/NotLabeled', groups=['all'], sequence_length=None, seed=42, device=DEFAULT_DEVICE):
-#         super().__init__(path, groups, sequence_length, seed, device)
+class NotLabeledDataset(PianoRollAudioDataset):
+    def __init__(self, path='data/NotLabeled', groups=['all'], sequence_length=None, seed=42, device=DEFAULT_DEVICE):
+        super().__init__(path, groups, sequence_length, seed, device)
 
-#     @classmethod
-#     def available_groups(cls):
-#         return ['all']
+    @classmethod
+    def available_groups(cls):
+        return ['all']
 
-#     def files(self, group):
-#         audios = glob(os.path.join(self.path, '*.flac')) + glob(os.path.join(self.path, '*.wav')) + glob(os.path.join(self.path, '*.mp3'))
-#         tsvs = ['' for f in audios]
+    def files(self, group):
+        audios = glob(os.path.join(self.path, '*.flac')) + glob(os.path.join(self.path, '*.wav')) #\
+            # + glob(os.path.join(self.path, '*.mp3'))
+        tsvs = ['' for f in audios]
 
-#         assert(all(os.path.isfile(flac) for flac in audios))
+        assert(all(os.path.isfile(flac) for flac in audios))
 
-#         return sorted(zip(audios, tsvs))
+        return sorted(zip(audios, tsvs))
 
 
