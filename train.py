@@ -27,10 +27,10 @@ ex = Experiment('train_transcriber')
 @ex.config
 def config():
     # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRCD-Conv_BiLSTM[freq->LMH,CQT,full_maestro,on_off_vel_use_baseline]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[combine_all_res_connect_freq->LMH,CQT,full_maestro]"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[no_combined_res_connect_freq->LMH,CQT,kernel_size=5,layernorm,logspecgram512]"
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    iterations = 500*1000
+    iterations = 800*1000
     resume_iteration = None
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
@@ -146,7 +146,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
         
 
-        if(i in [10, 100, 200, 400, 800] or i % 1000 == 0 ):
+        if(i in [100, 1000, 2000, 4000, 8000] or i % 10000 == 0 ):
             frame_img_pred = torch.swapdims(predictions['frame'], 1, 2)
             frame_img_pred = torch.unsqueeze(frame_img_pred, dim=1)
             # => [F x T]

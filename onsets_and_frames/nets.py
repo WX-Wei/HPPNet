@@ -287,8 +287,8 @@ class MRDConvNet(nn.Module):
             return nn.Sequential( 
                 nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
                 nn.ReLU(),
-                nn.BatchNorm2d(channel_out),
-                # nn.InstanceNorm2d(channel_out),
+                # nn.BatchNorm2d(channel_out),
+                nn.InstanceNorm2d(channel_out),
                 
             )
         else:
@@ -305,8 +305,8 @@ class MRDConvNet(nn.Module):
         self.device = DEFAULT_DEVICE
 
 
-        self.block_1 = self.get_conv2d_block(1, 16, kernel_size=3)
-        self.block_2 = self.get_conv2d_block(16, 16, kernel_size=3)
+        self.block_1 = self.get_conv2d_block(2, 16, kernel_size=5)
+        self.block_2 = self.get_conv2d_block(16, 16, kernel_size=5)
 
         c3_out = 128
 
@@ -348,7 +348,7 @@ class MRDConvNet(nn.Module):
 
 
     def forward(self, log_gram_db):
-        # inputs: [b x T x n_freq]
+        # inputs: [b x 2 x T x n_freq]
         # outputs: [b x T x 88]
 
 
@@ -368,11 +368,11 @@ class MRDConvNet(nn.Module):
 
 
         # => [b x 1 x T x 352]
-        x = torch.unsqueeze(log_gram_db, dim=1)
+        # x = torch.unsqueeze(log_gram_db, dim=1)
         # => [b x 2 x T x 352]
         # x = torch.cat([x, log_gram_db_delta], dim=1)
 
-        x = self.block_1(x)
+        x = self.block_1(log_gram_db)
         x = self.block_2(x)
 
         x = self.conv_3_1(x) + self.conv_3_2(x) + self.conv_3_3(x) + self.conv_3_4(x) + self.conv_3_5(x) + self.conv_3_6(x) + self.conv_3_7(x) + self.conv_3_8(x)

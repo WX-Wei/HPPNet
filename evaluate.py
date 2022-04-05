@@ -8,6 +8,7 @@ from mir_eval.multipitch import evaluate as evaluate_frames
 from mir_eval.transcription import precision_recall_f1_overlap as evaluate_notes
 from mir_eval.transcription_velocity import precision_recall_f1_overlap as evaluate_notes_with_velocity
 from mir_eval.util import midi_to_hz
+import mir_eval
 from scipy.stats import hmean
 from tqdm import tqdm
 from datetime import datetime
@@ -32,9 +33,11 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         label['frame'] = label['frame'].to(device)
         label['velocity'] = label['velocity'].to(device)
 
+        label['path'] = str(label['path'])
+
         if(not save_path is None):
             os.makedirs(save_path, exist_ok=True)
-            pred_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.h5')
+            pred_path = label_path = os.path.join(save_path, label['path'] + '.pred.h5')
         # load previous pred
         if(not save_path is None and os.path.exists(pred_path)):
             pred = {'onset':None, 'offset':None, 'frame':None, 'velocity': None}
@@ -105,10 +108,29 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         for key, value in pred.items():
             value.squeeze_(0).relu_()
 
+        # #############################
+        # onsets_pred = (pred['onset'] > onset_threshold).cpu().to(torch.float)
+        # onsets_pred_pad = onsets_pred.clone()
+        # onsets_pred_pad[:-1] += onsets_pred[1:]
+        # onsets_pred_pad[1:] += onsets_pred[:-1]
+        # # onsets_pred_pad[:-2] += onsets_pred[2:]
+        # # onsets_pred_pad[2:] += onsets_pred[:-2]
+        # onsets_pred_pad = torch.clip(onsets_pred_pad, 0, 1)
+        # onsets_ref = label['onset'].cpu().to(torch.float)
+        # metrics['metric/onsets/recall'].append( torch.sum(onsets_pred_pad*onsets_ref) / torch.sum(onsets_ref) )
+        # #############################3
+        
+
+
         # pitch, interval, velocity
         p_ref, i_ref, v_ref = extract_notes(label['onset'], label['frame'], label['velocity'])
         p_est, i_est, v_est = extract_notes(pred['onset'], pred['frame'], pred['velocity'], onset_threshold, frame_threshold)
 
+        note_ref = p_ref
+                
+        
+        
+        # time, frequency
         t_ref, f_ref = notes_to_frames(p_ref, i_ref, label['frame'].shape)
         t_est, f_est = notes_to_frames(p_est, i_est, pred['frame'].shape)
 
@@ -118,6 +140,18 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         p_ref = np.array([midi_to_hz(MIN_MIDI + midi) for midi in p_ref])
         i_est = (i_est * scaling).reshape(-1, 2)
         p_est = np.array([midi_to_hz(MIN_MIDI + midi) for midi in p_est])
+
+
+        ############################################
+        # # find what ref notes are not matched.
+        # matched_list = mir_eval.transcription.match_note_onsets(i_ref, i_est)
+        # matched_ref_list = [m[0] for m in matched_list]
+        # with open('not_matched_note.txt', 'a') as f:
+        #     # f.write('total notes:%d\n'%(len(p_est)))
+        #     for i in range(len(p_ref)):
+        #         if not i in matched_ref_list:
+        #             f.write('%d,%.3f,%.3f\n'%(note_ref[i], i_ref[i][1]-i_ref[i][0], v_ref[i]))
+        #########################################3
 
         t_ref = t_ref.astype(np.float64) * scaling
         f_ref = [np.array([midi_to_hz(MIN_MIDI + midi) for midi in freqs]) for freqs in f_ref]
@@ -194,13 +228,14 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
 
     res = '\n' + model_file +   '\n' + datetime.now().strftime('%y%m%d-%H%M%S') + '\n\nMetrics:\n'
     res += 'evaluate dataset and group:' + str(dataset) + ', ' + str(dataset_group) + '\n'
+    res += 'audio piece num: %d\n'%(len(dataset))
     res += 'onset and frame threshold: %f, %f'%(onset_threshold, frame_threshold) + '\n'
 
 
     for key, values in metrics.items():
         if key.startswith('metric/'):
             _, category, name = key.split('/')
-            res += '\n' + f'{category:>32} {name:25}: {np.mean(values):.3f} ± {np.std(values):.3f}'
+            res += '\n' + f'{category:>32} {name:25}: {np.mean(values):.4f} ± {np.std(values):.4f}'
             print(res)
 
     if(save_path != None):

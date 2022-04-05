@@ -22,7 +22,7 @@ import nnAudio
 
 
 e = 2**(1/24)
-to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=WINDOW_LENGTH, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
+to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=512, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
 # nnAudio.Spectrogram.CQT(sr=22050, hop_length=512, fmin=32.7, fmax=None, n_bins=84, bins_per_octave=12, filter_scale=1, norm=1, window='hann', center=True, pad_mode='reflect', trainable=False, output_format='Magnitude', verbose=True)
 to_cqt = nnAudio.Spectrogram.CQT(sr=SAMPLE_RATE, hop_length=HOP_LENGTH, fmin=27.5/e, n_bins=88*4, bins_per_octave=BINS_PER_SEMITONE*12, output_format='Magnitude').to(DEFAULT_DEVICE)
 
@@ -153,9 +153,14 @@ class OnsetsAndFrames(nn.Module):
         # => [b x T x 352]
         # log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
         cqt = to_cqt(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
-        spgcgram_db = self.amplitude_to_db(cqt)
+        log_specgram = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
+        cqt_db = self.amplitude_to_db(cqt)
+        log_specgram_db = self.amplitude_to_db(log_specgram)
 
-        activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(spgcgram_db)
+        # => [b x 2 x T x 352]
+        specgram_db = torch.stack([cqt_db, log_specgram_db], dim=1)
+
+        activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(specgram_db)
 
         results = []
         if 'onset' in SUB_NETS:
