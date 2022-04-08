@@ -128,13 +128,13 @@ class OnsetsAndFrames(nn.Module):
                 # nn.Linear(88, 88),
                 # nn.ReLU()
             )
-            self.combined_stack = nn.Sequential(
-                sequence_model(4, 64),
-                # sequence_model(8, 8),
-                nn.Linear(64, 1),
-                nn.Sigmoid(),
-                Squeeze(2)
-            )
+            # self.combined_stack = nn.Sequential(
+            #     sequence_model(4, 64),
+            #     # sequence_model(8, 8),
+            #     nn.Linear(64, 1),
+            #     nn.Sigmoid(),
+            #     Squeeze(2)
+            # )
         # if 'velocity' in SUB_NETS:
         #     self.velocity_stack = nn.Sequential(
         #         ConvStack(input_features, model_size),
@@ -153,12 +153,13 @@ class OnsetsAndFrames(nn.Module):
         # => [b x T x 352]
         # log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
         cqt = to_cqt(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
-        log_specgram = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
+        # log_specgram = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
         cqt_db = self.amplitude_to_db(cqt)
-        log_specgram_db = self.amplitude_to_db(log_specgram)
+        # log_specgram_db = self.amplitude_to_db(log_specgram)
 
         # => [b x 2 x T x 352]
-        specgram_db = torch.stack([cqt_db, log_specgram_db], dim=1)
+        # specgram_db = torch.stack([cqt_db, log_specgram_db], dim=1)
+        specgram_db = cqt_db
 
         activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(specgram_db)
 

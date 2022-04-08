@@ -12,6 +12,7 @@ import mir_eval
 from scipy.stats import hmean
 from tqdm import tqdm
 from datetime import datetime
+import matplotlib.pyplot as plt
 import h5py
 
 from torch.utils.data import Subset 
@@ -22,7 +23,7 @@ from onsets_and_frames import *
 eps = sys.float_info.epsilon
 
 
-def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None, save_metrics_only=False):
+def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None, save_metrics_only=False, clip_len=10240):
     metrics = defaultdict(list)
 
     for label in data:
@@ -35,9 +36,11 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
 
         label['path'] = str(label['path'])
 
+        frame_num = label['onset'].shape[-2]
+
         if(not save_path is None):
             os.makedirs(save_path, exist_ok=True)
-            pred_path = label_path = os.path.join(save_path, label['path'] + '.pred.h5')
+            pred_path = label_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.h5')
         # load previous pred
         if(not save_path is None and os.path.exists(pred_path)):
             pred = {'onset':None, 'offset':None, 'frame':None, 'velocity': None}
@@ -50,7 +53,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         # get new pred
         else:
             n_step =  label['onset'].shape[-2]
-            clip_len = 10000
+            
             # 
             if(len(label['audio'].size()) > 1 or n_step <= clip_len):
                 torch.cuda.empty_cache()
@@ -108,16 +111,29 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         for key, value in pred.items():
             value.squeeze_(0).relu_()
 
+
         # #############################
-        # onsets_pred = (pred['onset'] > onset_threshold).cpu().to(torch.float)
-        # onsets_pred_pad = onsets_pred.clone()
-        # onsets_pred_pad[:-1] += onsets_pred[1:]
-        # onsets_pred_pad[1:] += onsets_pred[:-1]
-        # # onsets_pred_pad[:-2] += onsets_pred[2:]
-        # # onsets_pred_pad[2:] += onsets_pred[:-2]
-        # onsets_pred_pad = torch.clip(onsets_pred_pad, 0, 1)
-        # onsets_ref = label['onset'].cpu().to(torch.float)
-        # metrics['metric/onsets/recall'].append( torch.sum(onsets_pred_pad*onsets_ref) / torch.sum(onsets_ref) )
+        # metrics of onset
+        onsets_pred = (pred['onset'] > onset_threshold).cpu().to(torch.float)
+        onsets_pred_pad = onsets_pred.clone()
+        onsets_pred_pad[:-1] += onsets_pred[1:]
+        onsets_pred_pad[1:] += onsets_pred[:-1]
+        onsets_pred_pad[:-2] += onsets_pred[2:]
+        onsets_pred_pad[2:] += onsets_pred[:-2]
+        onsets_pred_pad[:-3] += onsets_pred[3:]
+        onsets_pred_pad[3:] += onsets_pred[:-3]
+        onsets_pred_pad = torch.clip(onsets_pred_pad, 0, 1)
+        onset_pred_diff = torch.cat([onsets_pred[:1, :], onsets_pred[1:, :] - onsets_pred[:-1, :]], dim=0) == 1
+        onset_pred_diff = onset_pred_diff.to(torch.float)
+        onsets_ref = label['onset'].cpu().to(torch.float)
+        onset_ref_diff = torch.cat([onsets_ref[:1, :], onsets_ref[1:, :] - onsets_ref[:-1, :]], dim=0) == 1
+        onset_ref_diff = onset_ref_diff.to(torch.float)
+        onset_recall = torch.sum(onsets_pred_pad*onset_ref_diff) / torch.sum(onset_ref_diff)
+        onset_precision = torch.sum(onsets_pred_pad*onset_ref_diff) / torch.sum(onset_pred_diff)
+        onset_f1 = 2*onset_recall*onset_precision/(onset_recall+onset_precision)
+        metrics['metric/onsets/recall'].append( onset_recall )
+        metrics['metric/onsets/precision'].append( onset_precision )
+        metrics['metric/onsets/f1'].append( onset_f1 )
         # #############################3
         
 
@@ -159,6 +175,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         f_est = [np.array([midi_to_hz(MIN_MIDI + midi) for midi in freqs]) for freqs in f_est]
 
         p, r, f, o = evaluate_notes(i_ref, p_ref, i_est, p_est, offset_ratio=None)
+        note_recall = r
         metrics['metric/note/precision'].append(p)
         metrics['metric/note/recall'].append(r)
         metrics['metric/note/f1'].append(f)
@@ -189,6 +206,10 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         for key, loss in frame_metrics.items():
             metrics['metric/frame/' + key.lower().replace(' ', '_')].append(loss)
 
+        metrics_path = os.path.join(save_path,'metrics_of_each_audio.txt')
+        with open(metrics_path, 'a') as f:
+            f.write('note_recall:%.4f %s\n'%(note_recall, os.path.basename(label['path'])))
+
         if save_path is not None and save_metrics_only==False:
             os.makedirs(save_path, exist_ok=True)
             label_path = os.path.join(save_path, os.path.basename(label['path']) + '.label.png')
@@ -198,14 +219,20 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
             midi_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.mid')
             save_midi(midi_path, p_est, i_est, v_est)
 
-            frame_overlap_path = pred_path = os.path.join(save_path, os.path.basename(label['path']) + '.overlap.png')
+            frame_overlap_path = pred_path = os.path.join(save_path, os.path.basename(label['path']) + '.overlap.note_recall%.4f.png'%note_recall)
             utils.save_pianoroll_overlap(frame_overlap_path, label['frame'], pred['frame'], frame_threshold, zoom=1)
+
+            onset_overlap_path = pred_path = os.path.join(save_path, os.path.basename(label['path']) + '.onset_overlap.note_recall%.4f.png'%note_recall)
+            utils.save_pianoroll_overlap(onset_overlap_path, label['onset'], pred['onset'], onset_threshold, zoom=1)
+
+            pred_onset_path = pred_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.onset.png')
+            plt.imsave(pred_onset_path, pred['onset'].cpu().numpy())
 
     return metrics
 
 
 def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path,
-                  onset_threshold, frame_threshold, device):
+                  onset_threshold, frame_threshold, device, clip_len=1024):
 
     if(save_path == None):
         group_str = dataset_group if dataset_group is not None else 'default'
@@ -217,18 +244,19 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
         kwargs['groups'] = [dataset_group]
     dataset = dataset_class(**kwargs)
 
-    # dataset = Subset(dataset, list(range(50)))
+    # dataset = Subset(dataset, list(range(10)))
 
     model = torch.load(model_file, map_location=device).eval()
     summary(model)
 
-    metrics = evaluate(tqdm(dataset), model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=False)
+    metrics = evaluate(tqdm(dataset), model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=False, clip_len=clip_len)
 
     
 
     res = '\n' + model_file +   '\n' + datetime.now().strftime('%y%m%d-%H%M%S') + '\n\nMetrics:\n'
     res += 'evaluate dataset and group:' + str(dataset) + ', ' + str(dataset_group) + '\n'
     res += 'audio piece num: %d\n'%(len(dataset))
+    res += 'sequence_len: %s, clip_len: %d\n'%(str(sequence_length), clip_len)
     res += 'onset and frame threshold: %f, %f'%(onset_threshold, frame_threshold) + '\n'
 
 
@@ -251,8 +279,8 @@ if __name__ == '__main__':
     parser.add_argument('dataset_group', nargs='?', default=None)
     parser.add_argument('--save-path', default=None)
     parser.add_argument('--sequence-length', default=None, type=int)
-    parser.add_argument('--onset-threshold', default=0.3, type=float)
-    parser.add_argument('--frame-threshold', default=0.3, type=float)
+    parser.add_argument('--onset-threshold', default=0.4, type=float)
+    parser.add_argument('--frame-threshold', default=0.5, type=float)
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
 
     with torch.no_grad():
