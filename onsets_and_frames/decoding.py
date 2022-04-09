@@ -33,7 +33,7 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
         pitch = nonzero[1].item()
 
         onset = frame
-        offset = frame + 1 # consider all pred onset has a note.
+        offset = frame 
         velocity_samples = []
 
         while onsets[offset, pitch].item() or frames[offset, pitch].item():
@@ -43,10 +43,11 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
             if offset == onsets.shape[0]:
                 break
 
-        if offset > onset:
-            pitches.append(pitch)
-            intervals.append([onset, offset])
-            velocities.append(np.mean(velocity_samples) if len(velocity_samples) > 0 else 0)
+        # consider all pred onset has a note.
+        # if offset > onset:
+        pitches.append(pitch)
+        intervals.append([onset, max(onset+1, offset)])
+        velocities.append(np.mean(velocity_samples) if len(velocity_samples) > 0 else 0)
 
     return np.array(pitches), np.array(intervals), np.array(velocities)
 

@@ -27,15 +27,15 @@ ex = Experiment('train_transcriber')
 @ex.config
 def config():
     # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRCD-Conv_BiLSTM[freq->LMH,CQT,full_maestro,on_off_vel_use_baseline]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[no_combined_res_connect_freq->LMH,CQT,kernel_size=5,layernorm,logspecgram512]"
-    
+    # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[no_combined_res_connect_freq->LMH,CQT,kernel_size=5,layernorm,hop_len20ms,onset2]"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only]"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 800*1000
     resume_iteration = None
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
 
-    batch_size = 4
+    batch_size = 3
     sequence_length = 327680
     model_complexity = constants.MODEL_COMPLEXITY
 

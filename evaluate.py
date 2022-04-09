@@ -206,9 +206,10 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         for key, loss in frame_metrics.items():
             metrics['metric/frame/' + key.lower().replace(' ', '_')].append(loss)
 
-        metrics_path = os.path.join(save_path,'metrics_of_each_audio.txt')
-        with open(metrics_path, 'a') as f:
-            f.write('note_recall:%.4f %s\n'%(note_recall, os.path.basename(label['path'])))
+        # if save_path is not:
+        # metrics_path = os.path.join(save_path,'metrics_of_each_audio.txt')
+        # with open(metrics_path, 'a') as f:
+        #     f.write('note_recall:%.4f %s\n'%(note_recall, os.path.basename(label['path'])))
 
         if save_path is not None and save_metrics_only==False:
             os.makedirs(save_path, exist_ok=True)
@@ -232,7 +233,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
 
 
 def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path,
-                  onset_threshold, frame_threshold, device, clip_len=1024):
+                  onset_threshold, frame_threshold, device, clip_len=10240):
 
     if(save_path == None):
         group_str = dataset_group if dataset_group is not None else 'default'

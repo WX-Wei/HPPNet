@@ -323,26 +323,28 @@ class MRDConvNet(nn.Module):
 
         self.block_4 = self.get_conv2d_block(c3_out, c3_out, pool_size=[1, 4], dilation=[1, 48])
         self.block_5 = self.get_conv2d_block(c3_out, c3_out, dilation=[1, 12])
-        self.block_6 = self.get_conv2d_block(c3_out, c3_out, 1)
-        self.block_7 = self.get_conv2d_block(c3_out, c3_out, 1)
-        self.block_8 = self.get_conv2d_block(c3_out, c3_out, 1)
+        self.block_6 = self.get_conv2d_block(c3_out, c3_out, [5,1])
+        self.block_7 = self.get_conv2d_block(c3_out, c3_out, [5,1])
+        self.block_8 = self.get_conv2d_block(c3_out, c3_out, [5,1])
+        self.conv_9 = nn.Conv2d(c3_out, 64,1)
+        self.conv_10 = nn.Conv2d(64, 1, 1)
 
         lstm_size = 128
 
-        self.lstm = BiLSTM(c3_out, lstm_size//2)
+        # self.lstm = BiLSTM(c3_out, lstm_size//2)
         self.lstm_onsets = BiLSTM(c3_out, lstm_size//2)
-        self.lstm_offsets = BiLSTM(c3_out, lstm_size//2)
+        # self.lstm_offsets = BiLSTM(c3_out, lstm_size//2)
         # self.lstm_velocity = BiLSTM(c3_out, lstm_size//2)
 
-        self.linear_rnn = nn.Linear(lstm_size, 1)
-        self.linear_rnn_onsets = nn.Linear(lstm_size, 1)
-        self.linear_rnn_offsets = nn.Linear(lstm_size, 1)
+        # self.linear_rnn = nn.Linear(lstm_size, 1)
+        # self.linear_rnn_onsets = nn.Linear(lstm_size, 1)
+        # self.linear_rnn_offsets = nn.Linear(lstm_size, 1)
 
-        self.TCW_lstm_frame_low = TimeChannelWiseLSTM(c3_out, 1, 64)
-        self.TCW_lstm_frame_mid = TimeChannelWiseLSTM(c3_out, 1, 64)
-        self.TCW_lstm_frame_high = TimeChannelWiseLSTM(c3_out, 1, 64)
+        # self.TCW_lstm_frame_low = TimeChannelWiseLSTM(c3_out, 1, 64)
+        # self.TCW_lstm_frame_mid = TimeChannelWiseLSTM(c3_out, 1, 64)
+        # self.TCW_lstm_frame_high = TimeChannelWiseLSTM(c3_out, 1, 64)
 
-        self.conv_velocity = nn.Conv2d(c3_out, 1, 1)
+        # self.conv_velocity = nn.Conv2d(c3_out, 1, 1)
 
         
 
@@ -385,12 +387,16 @@ class MRDConvNet(nn.Module):
         x = self.block_6(x) + x
         x = self.block_7(x) + x
         x = self.block_8(x) + x
+        x = self.conv_9(x)
+        x = torch.relu(x)
+        x = self.conv_10(x)
+        x = torch.sigmoid(x)
 
-        # => [b x 1 x T x 88]
-        x_velocity = self.conv_velocity(x)
-        x_velocity = torch.relu(x_velocity)
-        # => [b x T x 88]
-        x_velocity = torch.squeeze(x_velocity, dim=1)
+        # # => [b x 1 x T x 88]
+        # x_velocity = self.conv_velocity(x)
+        # x_velocity = torch.relu(x_velocity)
+        # # => [b x T x 88]
+        # x_velocity = torch.squeeze(x_velocity, dim=1)
 
 
         # x_onset = self.TCW_lstm_onset(x)
@@ -399,21 +405,21 @@ class MRDConvNet(nn.Module):
         # x_offset = self.TCW_lstm_offset(x)
         # x_offset = torch.squeeze(x_offset, dim=1)
 
-        x_frame_low = self.TCW_lstm_frame_low(x[:, :, :, :29])
-        x_frame_mid = self.TCW_lstm_frame_mid(x[:, :, :, 29:59])
-        x_frame_high = self.TCW_lstm_frame_high(x[:, :, :, 59:])
-        x_frame = torch.cat([x_frame_low, x_frame_mid, x_frame_high], dim=3)
-        x_frame = torch.squeeze(x_frame, dim=1)
+        # x_frame_low = self.TCW_lstm_frame_low(x[:, :, :, :29])
+        # x_frame_mid = self.TCW_lstm_frame_mid(x[:, :, :, 29:59])
+        # x_frame_high = self.TCW_lstm_frame_high(x[:, :, :, 59:])
+        # x_frame = torch.cat([x_frame_low, x_frame_mid, x_frame_high], dim=3)
+        # x_frame = torch.squeeze(x_frame, dim=1)
 
         # x_frame = torch.squeeze(x_frame, dim=1)
 
         # => [b x 88 x T x ch]
-        x = torch.swapdims(x, 1, 3)
-        s = x.size()
-        # => [(b*88) x T x ch]
-        x = x.reshape(s[0]*s[1], s[2], s[3])
+        # x = torch.swapdims(x, 1, 3)
+        # s = x.size()
+        # # => [(b*88) x T x ch]
+        # x = x.reshape(s[0]*s[1], s[2], s[3])
 
-        x_0 = x
+        # x_0 = x
 
 
         # # => [(b*88) x T x 64]
@@ -426,24 +432,26 @@ class MRDConvNet(nn.Module):
         # # => [b x T x 88]
         # x_frame = torch.swapdims(x, 1, 2)
 
-        # => [(b*88) x T x 64]
-        x_onset = self.lstm_onsets(x_0)
-        # => [(b*88) x T x 1]
-        x_onset = self.linear_rnn_onsets(x_onset)
-        x_onset = torch.sigmoid(x_onset)
-        # => [b x 88 x T]
-        x_onset = x_onset.reshape(s[0], s[1], s[2])
-        # => [b x T x 88]
-        x_onset = torch.swapdims(x_onset, 1, 2)
+        # # => [(b*88) x T x 64]
+        # x_onset = self.lstm_onsets(x)
+        # # => [(b*88) x T x 1]
+        # x_onset = self.linear_rnn_onsets(x_onset)
+        # x_onset = torch.sigmoid(x_onset)
+        # # => [b x 88 x T]
+        # x_onset = x_onset.reshape(s[0], s[1], s[2])
+        # # => [b x T x 88]
+        # x_onset = torch.swapdims(x_onset, 1, 2)
 
-        # => [(b*88) x T x 64]
-        x_offset = self.lstm_offsets(x_0)
-        # => [(b*88) x T x 1]
-        x_offset = self.linear_rnn_offsets(x_offset)
-        x_offset = torch.sigmoid(x_offset)
-        # => [b x 88 x T]
-        x_offset = x_offset.reshape(s[0], s[1], s[2])
-        # => [b x T x 88]
-        x_offset = torch.swapdims(x_offset, 1, 2)
+        # # => [(b*88) x T x 64]
+        # x_offset = self.lstm_offsets(x_0)
+        # # => [(b*88) x T x 1]
+        # x_offset = self.linear_rnn_offsets(x_offset)
+        # x_offset = torch.sigmoid(x_offset)
+        # # => [b x 88 x T]
+        # x_offset = x_offset.reshape(s[0], s[1], s[2])
+        # # => [b x T x 88]
+        # x_offset = torch.swapdims(x_offset, 1, 2)
         
-        return x_frame , x_onset, x_offset, x_velocity
+        # return x_frame , x_onset, x_offset, x_velocity
+
+        return x * 0, x, x*0, x*0
