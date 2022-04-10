@@ -28,8 +28,9 @@ ex = Experiment('train_transcriber')
 def config():
     # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRCD-Conv_BiLSTM[freq->LMH,CQT,full_maestro,on_off_vel_use_baseline]"
     # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[no_combined_res_connect_freq->LMH,CQT,kernel_size=5,layernorm,hop_len20ms,onset2]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,log_specgram2]"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,soft_label]"
+    # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,log_specgram2]"
+    # logdir = 'data/runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,time_pooling4]"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 800*1000
     resume_iteration = None

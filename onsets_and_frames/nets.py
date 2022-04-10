@@ -385,8 +385,8 @@ class MRDConvNet(nn.Module):
         x = self.block_5(x)
         # => [b x ch x T x 88]
         x = self.block_6(x) + x
-        x = self.block_7(x) + x
-        x = self.block_8(x) + x
+        # x = self.block_7(x) + x
+        # x = self.block_8(x) + x
         x = self.conv_9(x)
         x = torch.relu(x)
         x = self.conv_10(x)

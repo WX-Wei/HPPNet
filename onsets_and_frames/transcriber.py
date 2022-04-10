@@ -149,20 +149,20 @@ class OnsetsAndFrames(nn.Module):
 
 
         # => [n_mel x T] => [T x n_mel]
-        mel = melspectrogram(waveforms).transpose(-1, -2)[:, :self.frame_num, :]
+        # mel = melspectrogram(waveforms).transpose(-1, -2)[:, :self.frame_num, :]
 
         # => [b x T x 352]
         # log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
-        # cqt = to_cqt(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
+        cqt = to_cqt(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
         log_specgram = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
-        log_specgram_2 = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
+        # log_specgram_2 = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
         
-        # cqt_db = self.amplitude_to_db(cqt)
+        cqt_db = self.amplitude_to_db(cqt)
         log_specgram_db = self.amplitude_to_db(log_specgram)
-        log_specgram_db_2 = self.amplitude_to_db(log_specgram_2)
+        # log_specgram_db_2 = self.amplitude_to_db(log_specgram_2)
 
         # => [b x 2 x T x 352]
-        specgram_db = torch.stack([log_specgram_db, log_specgram_db_2], dim=1)
+        specgram_db = torch.stack([log_specgram_db, cqt_db], dim=1)
         # specgram_db = cqt_db
 
         activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(specgram_db)

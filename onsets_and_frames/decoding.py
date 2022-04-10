@@ -20,6 +20,13 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
     intervals: np.ndarray of rows containing (onset_index, offset_index)
     velocities: np.ndarray of velocity values
     """
+
+    # only peaks are consider as onsets
+    left = onsets[:1, :] >= onsets[1:2, :]
+    right = onsets[-1:, :] >= onsets[-2:-1, :]
+    mid = onsets[1:-1] >= onsets[2:] and onsets[1:-1] >= onsets[:-2]
+    onsets = torch.cat([left, mid, right], dim=0).float() * onsets
+
     onsets = (onsets > onset_threshold).cpu().to(torch.uint8)
     frames = (frames > frame_threshold).cpu().to(torch.uint8)
     onset_diff = torch.cat([onsets[:1, :], onsets[1:, :] - onsets[:-1, :]], dim=0) == 1
