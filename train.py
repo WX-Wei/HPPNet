@@ -31,8 +31,9 @@ def config():
     logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,soft_label]"
     # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,log_specgram2]"
     # logdir = 'data/runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,time_pooling4]"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_HD-Conv[onset_only,weighted_loss_2_true,LSTM]"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    iterations = 800*1000
+    iterations = 500*1000
     resume_iteration = None
     checkpoint_interval = 2000
     train_on = 'MAESTRO'

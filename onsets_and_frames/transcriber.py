@@ -230,7 +230,9 @@ class OnsetsAndFrames(nn.Module):
             predictions['onset'] = results[idx].reshape(*onset_label.shape)
             # [b x T x 88]
             onset_ref_soft = onset_label.clone()
-            losses['loss/onset'] = F.binary_cross_entropy(predictions['onset'], onset_label)
+            losses['loss/onset'] = - 2 * onset_label * torch.log(predictions['onset']) - ( 1 - onset_label) * torch.log(1-predictions['onset'])
+            losses['loss/onset'] = losses['loss/onset'].mean()
+            # losses['loss/onset'] = F.binary_cross_entropy(predictions['onset'], onset_label)
             idx += 1
         if 'offset' in SUB_NETS:
             predictions['offset'] = results[idx].reshape(*offset_label.shape)

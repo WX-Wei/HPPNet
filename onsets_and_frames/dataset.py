@@ -85,6 +85,7 @@ class PianoRollAudioDataset(Dataset):
             result['frame'] = (result['label'] > 1).float()
             result['velocity'] = result['velocity'].float().div_(128.0)
 
+            # Down sampling
             # result['onset'] = max_pooling(result['onset'], [4, 1])
             # result['offset'] = max_pooling(result['offset'], [4, 1])
             # result['frame'] = max_pooling(result['frame'], [4, 1])
@@ -92,13 +93,13 @@ class PianoRollAudioDataset(Dataset):
 
             # Soft label
             # => [..., 0, 0.3, 0.7, 1, 0.7, 0.3, 0, ...]
-            onset_7 = result['onset'] * 0.7
-            onset_3 = result['onset'] * 0.3
-            result['onset'][1:] += onset_7[:-1]
-            result['onset'][:-1] += onset_7[1:]
-            result['onset'][2:] += onset_3[:-2]
-            result['onset'][:-2] += onset_3[2:]
-            result['onset'] = np.clip(result['onset'], 0, 1)
+            # onset_7 = result['onset'] * 0.7
+            # onset_3 = result['onset'] * 0.3
+            # result['onset'][1:] += onset_7[:-1]
+            # result['onset'][:-1] += onset_7[1:]
+            # result['onset'][2:] += onset_3[:-2]
+            # result['onset'][:-2] += onset_3[2:]
+            # result['onset'] = np.clip(result['onset'], 0, 1)
 
 
         return result

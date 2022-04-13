@@ -24,7 +24,7 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
     # only peaks are consider as onsets
     left = onsets[:1, :] >= onsets[1:2, :]
     right = onsets[-1:, :] >= onsets[-2:-1, :]
-    mid = onsets[1:-1] >= onsets[2:] and onsets[1:-1] >= onsets[:-2]
+    mid = (onsets[1:-1] >= onsets[2:]).float() * (onsets[1:-1] >= onsets[:-2]).float()
     onsets = torch.cat([left, mid, right], dim=0).float() * onsets
 
     onsets = (onsets > onset_threshold).cpu().to(torch.uint8)
