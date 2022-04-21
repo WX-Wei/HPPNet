@@ -6,6 +6,8 @@ import numpy as np
 from sacred import Experiment
 from sacred.commands import print_config
 from sacred.observers import FileStorageObserver
+from sacred.observers import MongoObserver
+
 from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
@@ -19,10 +21,12 @@ from evaluate import evaluate
 from onsets_and_frames import *
 
 
-
 ex = Experiment('train_transcriber')
 
+mongo_ob = MongoObserver.create(url='10.177.55.66:7000', db_name='piano_transcription') #harmonic_net_mono
+ex.observers.append(mongo_ob)
 
+ex.tags = []
 
 
 @ex.config
@@ -39,7 +43,7 @@ def config():
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
 
-    batch_size = 3
+    batch_size = 2
     sequence_length = 327680
     model_complexity = constants.MODEL_COMPLEXITY
 
@@ -61,7 +65,28 @@ def config():
 
     ex.observers.append(FileStorageObserver.create(logdir))
 
+    training_size = 1.0 # [1.0, 0.3, 0.1]
 
+
+
+@ex.config
+def model_config():
+    model_name = "HPP" # modeling harmonic structure and pitch invariance in piano transcription
+    head_type = 'FB-LSTM' # 'LSTM', 'None'
+    trunk_type = 'HD-Conv' # 'SD-Conv', 'None'
+
+    model_size = 128
+
+
+#####################################
+# ablation study
+
+
+@ex.named_config
+def baseline_onsets_and_frames():
+    model_name = 'onsets&frames'
+
+    
 
 
 ex.main_locals = locals()
@@ -74,7 +99,6 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     print_config(ex.current_run)
 
 
-
     # add source files to ex
     src_file_set = set()
     src_file_dir = os.path.join(ex.observers[0].dir, 'src')
@@ -82,7 +106,8 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     for src_path in src_file_set:
         ex.add_source_file(src_path)
 
-
+    utils.copy_dir('./', src_file_dir)
+    utils.copy_dir('./onsets_and_frames', os.path.join(src_file_dir, 'onsets_and_frames'))
 
 
     os.makedirs(logdir, exist_ok=True)
@@ -111,7 +136,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     optimizers = {}
     if resume_iteration is None:
-        model = OnsetsAndFrames(N_MELS, MAX_MIDI - MIN_MIDI + 1, model_complexity).to(device)
+        model = OnsetsAndFrames(N_MELS, MAX_MIDI - MIN_MIDI + 1, ex.current_run.config).to(device)
         # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
         for subnet in SUB_NETS:
             optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
@@ -163,6 +188,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
         for key, value in {'loss': loss, **losses}.items():
             writer.add_scalar(key, value.item(), global_step=i)
+            ex.log_scalar(key, value.item(),i)
 
         
 
@@ -188,6 +214,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             with torch.no_grad():
                 for key, value in evaluate(validation_dataset, model, device).items():
                     writer.add_scalar('validation/' + key.replace(' ', '_'), np.mean(value), global_step=i)
+                    ex.log_scalar('validation/' + key.replace(' ', '_'), np.mean(value), i)
             model.train()
 
         if i % checkpoint_interval == 0:

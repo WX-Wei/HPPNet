@@ -6,7 +6,7 @@ A rough translation of Magenta's Onsets and Frames implementation [1].
 
 import torch
 import torch.nn.functional as F
-from torch import nn
+from torch import lstm, nn
 import torchaudio
 
 from .lstm import BiLSTM
@@ -89,11 +89,23 @@ class ConvStack(nn.Module):
         return x
 
 
+
+
 class OnsetsAndFrames(nn.Module):
-    def __init__(self, input_features, output_features, model_complexity=8):
+    def get_head(self, type, model_size):
+        heads = {
+            'FB-LSTM': FrqeBinLSTM(model_size, 1, model_size) ,
+            'None': nn.Conv2d(model_size, 1, 1)
+        }
+        return heads[type]
+    def __init__(self, input_features, output_features, config):
         super().__init__()
 
-        model_size = model_complexity * 16
+        self.config = config
+
+        model_size = config['model_size']
+        head_type = config['head_type']
+        trunk_type = config['trunk_type']
         sequence_model = lambda input_size, output_size: BiLSTM(input_size, output_size // 2)
 
         self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
@@ -102,61 +114,20 @@ class OnsetsAndFrames(nn.Module):
 
         if 'onset' in SUB_NETS:
             self.onset_dict = nn.ModuleDict({
-                'onset_conv': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
-                'onset_lstm': FrqeBinLSTM(model_size, 1, model_size)
+                'onset_trunk': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
+                'onset_head': self.get_head(head_type, model_size)
             })
             self.sub_nets['onset'] = self.onset_dict
-            # self.onset_stack = nn.Sequential(
-            #     # ConvStack(input_features, model_size),
-            #     # sequence_model(model_size, model_size),
-            #     # nn.Linear(model_size, output_features),
-            #     # nn.Sigmoid()
-            #     HarmonicDilatedConv(),
-            # )
-        # if 'offset' in SUB_NETS:
-        #     self.offset_stack = nn.Sequential(
-        #         ConvStack(input_features, model_size),
-        #         sequence_model(model_size, model_size),
-        #         nn.Linear(model_size, output_features),
-        #         nn.Sigmoid()
-        #         # HarmonicDilatedConv(),
-        #     )
-
         if 'frame' in SUB_NETS:
             self.frame_dict = nn.ModuleDict({
-                'frame_conv': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
-                'frame_lstm': FrqeBinLSTM(model_size*2, 1, model_size)
+                'frame_trunk': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
+                'frame_head': self.get_head(head_type, model_size)
             })
             self.sub_nets['frame'] = self.frame_dict
-            # self.frame_stack = nn.Sequential(
-            #     # ConvStack(input_features, model_size),
-            #     # HarmSpecgramConvBlock(88),
-            #     # HarmSpecgramConvNet(88),
-
-            #     HarmonicDilatedConv(),
-
-            #     # ChromaNet(),
-
-            #     # sequence_model(88 , 88),
-            #     # nn.Linear(88, 88),
-            #     # nn.ReLU()
-            # )
-            # self.combined_stack = nn.Sequential(
-            #     sequence_model(4, 64),
-            #     # sequence_model(8, 8),
-            #     nn.Linear(64, 1),
-            #     nn.Sigmoid(),
-            #     Squeeze(2)
-            # )
         if 'velocity' in SUB_NETS:
-        #     self.velocity_stack = nn.Sequential(
-        #         ConvStack(input_features, model_size),
-        #         # HarmSpecgramConvBlock(model_size),
-        #         nn.Linear(model_size, output_features)
-        #     )
             self.velocity_dict = nn.ModuleDict({
-                'velocity_conv': HarmonicDilatedConv(c_in=2, c_har=4, embedding=4),
-                'velocity_lstm': FrqeBinLSTM(4, 1, 4)
+                'velocity_trunk': HarmonicDilatedConv(c_in=2, c_har=4, embedding=4),
+                'velocity_head': self.get_head(head_type, 4)
             })
             self.sub_nets['velocity'] = self.velocity_dict
 
@@ -187,49 +158,29 @@ class OnsetsAndFrames(nn.Module):
         results = []
         if 'onset' in SUB_NETS:
             # onset_pred = self.onset_stack(mel)
-            onset_embeding = self.onset_dict['onset_conv'](specgram_db)
-            onset_pred = self.onset_dict['onset_lstm'](onset_embeding)
+            onset_embeding = self.onset_dict['onset_trunk'](specgram_db)
+            onset_pred = self.onset_dict['onset_head'](onset_embeding)
             onset_pred = torch.clip(onset_pred, 1e-7, 1 - 1e-7)
             results.append(onset_pred)
-        if 'offset' in SUB_NETS:
-            # offset_pred = self.offset_stack(mel)
-            results.append(offset_pred)
 
         # down sampling time dim, frames pred don't need high time resolution.
         specgram_db_pool = F.avg_pool2d(specgram_db, [2,1])
         if 'frame' in SUB_NETS:
-            frame_embeding = self.frame_dict['frame_conv'](specgram_db_pool)
+            frame_embeding = self.frame_dict['frame_trunk'](specgram_db_pool)
             # => [B x (c_onset+c_frame) x T x 88]
             onset_embeding_pool = F.max_pool2d(onset_embeding, [2,1])
             stack_embeding = torch.cat([onset_embeding_pool.detach(), frame_embeding], dim=1)
-            frame_pred = self.frame_dict['frame_lstm'](stack_embeding)
+            frame_pred = self.frame_dict['frame_head'](stack_embeding)
             # frame_pred = torch.squeeze(frame_pred, dim=1)
             # [B x 1 x T/2 x 88] => [B x 1 x T x 88]
             # frame_pred = torch.repeat_interleave(frame_pred, 2, dim=2)
             frame_pred = F.upsample(frame_pred, scale_factor=[2,1], mode='bilinear')
-            
             results.append(frame_pred)
 
-        
-            # combined_pred = torch.unsqueeze(activation_pred, 3)
-            # if 'onset' in SUB_NETS:
-            #     combined_pred = torch.cat([torch.unsqueeze(onset_pred, 3).detach(), combined_pred], dim=-1)
-            # if 'offset' in SUB_NETS:
-            #     combined_pred = torch.cat([torch.unsqueeze(offset_pred, 3).detach(), combined_pred], dim=-1)
-            # if 'velocity' in SUB_NETS:
-            #     # print(velocity_pred.size(), combined_pred.size())
-            #     combined_pred = torch.cat([torch.unsqueeze(velocity_pred, 3).detach(), combined_pred], dim=-1)
-            # combined_pred = torch.permute(combined_pred, [0, 2, 1, 3])
-            # # => [(b*88) x T x 3]
-            # combined_pred = combined_pred.reshape([-1, combined_pred.size()[2], combined_pred.size()[3]])
-            # frame_pred = self.combined_stack(combined_pred)
-            # frame_pred = torch.reshape(frame_pred, [-1, 88, frame_pred.size()[-1]])
-            # frame_pred = torch.permute(frame_pred, [0, 2, 1])
-            # results.append(frame_pred)
         if 'velocity' in SUB_NETS:
             # velocity_pred = self.velocity_stack(mel)
-            velocity_embeding = self.velocity_dict['velocity_conv'](specgram_db_pool)
-            velocity_pred = self.velocity_dict['velocity_lstm'](velocity_embeding)
+            velocity_embeding = self.velocity_dict['velocity_trunk'](specgram_db_pool)
+            velocity_pred = self.velocity_dict['velocity_head'](velocity_embeding)
             # velocity_pred = torch.squeeze(velocity_pred, dim=1)
             velocity_pred = F.upsample(velocity_pred, scale_factor=[2,1], mode='bilinear')
             results.append(velocity_pred)

@@ -133,3 +133,15 @@ def save_src_files(elems_dict, dest_dir, query_str = 'pytorch/', src_path_set = 
                     save_src_files(new_elem_dict, dest_dir, query_str, src_path_set)
             except:
                 pass
+
+def copy_dir(src_dir, dest_dir, file_type = '.py'):
+    for item in os.scandir(src_dir):
+        if item.is_dir():
+            pass
+        elif item.is_file():
+            name, ext = os.path.splitext(item.path)
+            if(ext == file_type):
+                relative_path = os.path.relpath(item.path, src_dir)
+                dest_path = os.path.join(dest_dir, relative_path)
+                os.makedirs(os.path.split(dest_path)[0], exist_ok=True)
+                copy_file(item.path, dest_path)
