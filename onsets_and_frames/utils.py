@@ -144,4 +144,4 @@ def copy_dir(src_dir, dest_dir, file_type = '.py'):
                 relative_path = os.path.relpath(item.path, src_dir)
                 dest_path = os.path.join(dest_dir, relative_path)
                 os.makedirs(os.path.split(dest_path)[0], exist_ok=True)
-                copy_file(item.path, dest_path)
+                copyfile(item.path, dest_path)

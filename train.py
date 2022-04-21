@@ -36,7 +36,7 @@ def config():
     logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,soft_label]"
     # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,log_specgram2]"
     # logdir = 'data/runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,time_pooling4]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_HD-Conv[onset_frame_vel_sep_0413,weighted_loss_2,LSTM,maestro-v3]"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_HD-Conv[onset_frame_vel_sep_0413,no_LSTM,weighted_loss_2,LSTM,maestro-v3]"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 500*1000
     resume_iteration = None
@@ -72,8 +72,8 @@ def config():
 @ex.config
 def model_config():
     model_name = "HPP" # modeling harmonic structure and pitch invariance in piano transcription
-    head_type = 'FB-LSTM' # 'LSTM', 'None'
-    trunk_type = 'HD-Conv' # 'SD-Conv', 'None'
+    head_type = 'FB-LSTM' # 'LSTM', 'Conv'
+    trunk_type = 'HD-Conv' # 'SD-Conv', 'Conv'
 
     model_size = 128
 
@@ -101,7 +101,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     # add source files to ex
     src_file_set = set()
-    src_file_dir = os.path.join(ex.observers[0].dir, 'src')
+    src_file_dir = os.path.join(ex.observers[1].dir, 'src')
     utils.save_src_files(ex.main_locals, src_file_dir, query_str='onsets-and-frames', src_path_set=src_file_set)
     for src_path in src_file_set:
         ex.add_source_file(src_path)

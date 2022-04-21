@@ -12,9 +12,7 @@ import torchaudio
 from .lstm import BiLSTM
 from .mel import melspectrogram
 
-from .nets import HarmSpecgramConvBlock, HarmSpecgramConvNet, HarmonicDilatedConv
-
-from .ChromaNet import ChromaNet, FrqeBinLSTM
+from .nets import  HarmonicDilatedConv, FrqeBinLSTM
 
 from .constants import *
 
@@ -22,10 +20,10 @@ import nnAudio
 
 
 e = 2**(1/24)
-to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=512, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
-to_log_specgram_2 = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=2048, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude').to(DEFAULT_DEVICE)
+to_log_specgram = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=512, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude')
+# to_log_specgram_2 = nnAudio.Spectrogram.STFT(sr=SAMPLE_RATE, n_fft=2048, freq_bins=88*4, hop_length=HOP_LENGTH, freq_scale='log', fmin=27.5/e, fmax=4186.0*e, output_format='Magnitude')
 # nnAudio.Spectrogram.CQT(sr=22050, hop_length=512, fmin=32.7, fmax=None, n_bins=84, bins_per_octave=12, filter_scale=1, norm=1, window='hann', center=True, pad_mode='reflect', trainable=False, output_format='Magnitude', verbose=True)
-to_cqt = nnAudio.Spectrogram.CQT(sr=SAMPLE_RATE, hop_length=HOP_LENGTH, fmin=27.5/e, n_bins=88*4, bins_per_octave=BINS_PER_SEMITONE*12, output_format='Magnitude').to(DEFAULT_DEVICE)
+to_cqt = nnAudio.Spectrogram.CQT(sr=SAMPLE_RATE, hop_length=HOP_LENGTH, fmin=27.5/e, n_bins=88*4, bins_per_octave=BINS_PER_SEMITONE*12, output_format='Magnitude')
 
 class Reshape(nn.Module):
     def __init__(self, *args):
@@ -95,7 +93,7 @@ class OnsetsAndFrames(nn.Module):
     def get_head(self, type, model_size):
         heads = {
             'FB-LSTM': FrqeBinLSTM(model_size, 1, model_size) ,
-            'None': nn.Conv2d(model_size, 1, 1)
+            'Conv': nn.Sequential(nn.Conv2d(model_size, 1, 1), nn.Sigmoid())
         }
         return heads[type]
     def __init__(self, input_features, output_features, config):
@@ -108,6 +106,10 @@ class OnsetsAndFrames(nn.Module):
         trunk_type = config['trunk_type']
         sequence_model = lambda input_size, output_size: BiLSTM(input_size, output_size // 2)
 
+        global to_cqt
+        global to_log_specgram
+        to_cqt = to_cqt.to(config['device'])
+        to_log_specgram = to_log_specgram.to(config['device'])
         self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
 
         self.sub_nets = {}
@@ -121,7 +123,7 @@ class OnsetsAndFrames(nn.Module):
         if 'frame' in SUB_NETS:
             self.frame_dict = nn.ModuleDict({
                 'frame_trunk': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
-                'frame_head': self.get_head(head_type, model_size)
+                'frame_head': self.get_head(head_type, model_size*2)
             })
             self.sub_nets['frame'] = self.frame_dict
         if 'velocity' in SUB_NETS:
