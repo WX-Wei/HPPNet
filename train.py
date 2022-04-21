@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from re import sub, subn
 
 import numpy as np
 from sacred import Experiment
@@ -31,14 +32,14 @@ def config():
     logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,soft_label]"
     # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,log_specgram2]"
     # logdir = 'data/runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,time_pooling4]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_HD-Conv[onset_only,weighted_loss_2_true,LSTM]"
+    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_HD-Conv[onset_frame_vel_sep_0413,weighted_loss_2,LSTM,maestro-v3]"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 500*1000
     resume_iteration = None
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
 
-    batch_size = 4
+    batch_size = 3
     sequence_length = 327680
     model_complexity = constants.MODEL_COMPLEXITY
 
@@ -108,19 +109,28 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     # validation_dataset = DataLoader(validation_dataset, num_workers=4)
 
 
-
+    optimizers = {}
     if resume_iteration is None:
         model = OnsetsAndFrames(N_MELS, MAX_MIDI - MIN_MIDI + 1, model_complexity).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), learning_rate)
+        # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
+        for subnet in SUB_NETS:
+            optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
         resume_iteration = 0
     else:
         model_path = os.path.join(logdir, f'model-{resume_iteration}.pt')
         model = torch.load(model_path)
-        optimizer = torch.optim.Adam(model.parameters(), learning_rate)
-        optimizer.load_state_dict(torch.load(os.path.join(logdir, 'last-optimizer-state.pt')))
-
+        # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
+        # optimizer.load_state_dict(torch.load(os.path.join(logdir, 'last-optimizer-state.pt')))
+        for subnet in SUB_NETS:
+            optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
+            optimizers[subnet].load_state_dict(torch.load(os.path.join(logdir, f'last-optimizer-state-{subnet}.pt')))
+            
     summary(model)
-    scheduler = StepLR(optimizer, step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
+    # scheduler = StepLR(optimizer, step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
+    schedulers = {}
+    for subnet in SUB_NETS:
+        schedulers[subnet] = StepLR(optimizers[subnet], step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
+    
 
     loop = tqdm(range(resume_iteration + 1, iterations + 1))
     for i, batch in zip(loop, cycle(loader)):
@@ -136,10 +146,17 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         predictions, losses = model.run_on_batch(batch)
 
         loss = sum(losses.values())
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
+        # optimizer.zero_grad()
+        # loss.backward()
+        # optimizer.step()
+        # scheduler.step()
+
+        for subnet in SUB_NETS:
+            loss_subnet = losses[f'loss/{subnet}']
+            optimizers[subnet].zero_grad()
+            loss_subnet.backward()
+            optimizers[subnet].step()
+            schedulers[subnet].step()
 
         if clip_gradient_norm:
             clip_grad_norm_(model.parameters(), clip_gradient_norm)
@@ -175,4 +192,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
         if i % checkpoint_interval == 0:
             torch.save(model, os.path.join(logdir, f'model-{i}.pt'))
-            torch.save(optimizer.state_dict(), os.path.join(logdir, 'last-optimizer-state.pt'))
+
+            # torch.save(optimizer.state_dict(), os.path.join(logdir, 'last-optimizer-state.pt'))
+            for subnet in SUB_NETS:
+                torch.save(optimizers[subnet].state_dict(), os.path.join(logdir, f'last-optimizer-state-{subnet}.pt'))

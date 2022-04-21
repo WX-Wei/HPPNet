@@ -50,7 +50,7 @@ class MRDC_Conv(nn.Module):
 
 
 
-class TimeChannelWiseLSTM(nn.Module):
+class FrqeBinLSTM(nn.Module):
     def __init__(self, channel_in, channel_out, lstm_size) -> None:
         super().__init__()
 
@@ -148,7 +148,7 @@ class ChromaNet(nn.Module):
 
 
 
-class MRDConvNet(nn.Module):
+class HarmonicDilatedConv(nn.Module):
     def get_conv2d_block(self, channel_in,channel_out, kernel_size = [1, 3], pool_size = [1, 1], dilation = [1, 1]):
         return nn.Sequential( 
             nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
@@ -191,9 +191,9 @@ class MRDConvNet(nn.Module):
         self.linear_rnn_onsets = nn.Linear(lstm_size, 1)
         self.linear_rnn_offsets = nn.Linear(lstm_size, 1)
 
-        self.TCW_lstm_frame_low = TimeChannelWiseLSTM(128, 1, 64)
-        self.TCW_lstm_frame_mid = TimeChannelWiseLSTM(128, 1, 64)
-        self.TCW_lstm_frame_high = TimeChannelWiseLSTM(128, 1, 64)
+        self.TCW_lstm_frame_low = FrqeBinLSTM(128, 1, 64)
+        self.TCW_lstm_frame_mid = FrqeBinLSTM(128, 1, 64)
+        self.TCW_lstm_frame_high = FrqeBinLSTM(128, 1, 64)
 
         self.conv_velocity = nn.Conv2d(128, 1, 1)
 
