@@ -11,16 +11,21 @@ from sacred.observers import MongoObserver
 from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
+import torch
+import torch.cuda
 import torchaudio
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from random_words import RandomWords
 
 from evaluate import evaluate
 from onsets_and_frames import *
 
-
+rw = RandomWords()
+random_word_str = rw.random_word()
+time_str = datetime.now().strftime('%y%m%d-%H%M%S') + '_' + random_word_str
 ex = Experiment('train_transcriber')
 
 mongo_ob = MongoObserver.create(url='10.177.55.66:7000', db_name='piano_transcription') #harmonic_net_mono
@@ -29,14 +34,10 @@ ex.observers.append(mongo_ob)
 ex.tags = []
 
 
+
 @ex.config
 def config():
-    # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRCD-Conv_BiLSTM[freq->LMH,CQT,full_maestro,on_off_vel_use_baseline]"
-    # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[no_combined_res_connect_freq->LMH,CQT,kernel_size=5,layernorm,hop_len20ms,onset2]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,soft_label]"
-    # logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,log_specgram2]"
-    # logdir = 'data/runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_MRD-Conv_BILSTM[onset_only,time_pooling4]"
-    logdir = 'runs/transcriber-' + datetime.now().strftime('%y%m%d-%H%M%S') + "_HD-Conv[onset_frame_vel_sep_0413,no_LSTM,weighted_loss_2,LSTM,maestro-v3]"
+    logdir = 'runs/transcriber-' + time_str
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     iterations = 500*1000
     resume_iteration = None
@@ -45,7 +46,7 @@ def config():
 
     batch_size = 2
     sequence_length = 327680
-    model_complexity = constants.MODEL_COMPLEXITY
+    model_complexity = 48
 
     if torch.cuda.is_available() and torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory < 10e9:
         batch_size //= 2
@@ -71,6 +72,7 @@ def config():
 
 @ex.config
 def model_config():
+    SUB_NETS = ['onset', 'frame', 'velocity']
     model_name = "HPP" # modeling harmonic structure and pitch invariance in piano transcription
     head_type = 'FB-LSTM' # 'LSTM', 'Conv'
     trunk_type = 'HD-Conv' # 'SD-Conv', 'Conv'
@@ -94,9 +96,11 @@ ex.main_locals = locals()
 
 @ex.automain
 def train(logdir, device, iterations, resume_iteration, checkpoint_interval, train_on, batch_size, sequence_length,
-          model_complexity, learning_rate, learning_rate_decay_steps, learning_rate_decay_rate, leave_one_out,
+           learning_rate, learning_rate_decay_steps, learning_rate_decay_rate, leave_one_out,
           clip_gradient_norm, validation_length, validation_interval):
     print_config(ex.current_run)
+
+    SUB_NETS = ex.current_run.config['SUB_NETS']
 
 
     # add source files to ex

@@ -100,6 +100,7 @@ class OnsetsAndFrames(nn.Module):
         super().__init__()
 
         self.config = config
+        
 
         model_size = config['model_size']
         head_type = config['head_type']
@@ -114,19 +115,19 @@ class OnsetsAndFrames(nn.Module):
 
         self.sub_nets = {}
 
-        if 'onset' in SUB_NETS:
+        if 'onset' in self.config['SUB_NETS']:
             self.onset_dict = nn.ModuleDict({
                 'onset_trunk': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
                 'onset_head': self.get_head(head_type, model_size)
             })
             self.sub_nets['onset'] = self.onset_dict
-        if 'frame' in SUB_NETS:
+        if 'frame' in self.config['SUB_NETS']:
             self.frame_dict = nn.ModuleDict({
                 'frame_trunk': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
                 'frame_head': self.get_head(head_type, model_size*2)
             })
             self.sub_nets['frame'] = self.frame_dict
-        if 'velocity' in SUB_NETS:
+        if 'velocity' in self.config['SUB_NETS']:
             self.velocity_dict = nn.ModuleDict({
                 'velocity_trunk': HarmonicDilatedConv(c_in=2, c_har=4, embedding=4),
                 'velocity_head': self.get_head(head_type, 4)
@@ -158,7 +159,7 @@ class OnsetsAndFrames(nn.Module):
         # activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(specgram_db)
 
         results = []
-        if 'onset' in SUB_NETS:
+        if 'onset' in self.config['SUB_NETS']:
             # onset_pred = self.onset_stack(mel)
             onset_embeding = self.onset_dict['onset_trunk'](specgram_db)
             onset_pred = self.onset_dict['onset_head'](onset_embeding)
@@ -167,7 +168,7 @@ class OnsetsAndFrames(nn.Module):
 
         # down sampling time dim, frames pred don't need high time resolution.
         specgram_db_pool = F.avg_pool2d(specgram_db, [2,1])
-        if 'frame' in SUB_NETS:
+        if 'frame' in self.config['SUB_NETS']:
             frame_embeding = self.frame_dict['frame_trunk'](specgram_db_pool)
             # => [B x (c_onset+c_frame) x T x 88]
             onset_embeding_pool = F.max_pool2d(onset_embeding, [2,1])
@@ -179,7 +180,7 @@ class OnsetsAndFrames(nn.Module):
             frame_pred = F.upsample(frame_pred, scale_factor=[2,1], mode='bilinear')
             results.append(frame_pred)
 
-        if 'velocity' in SUB_NETS:
+        if 'velocity' in self.config['SUB_NETS']:
             # velocity_pred = self.velocity_stack(mel)
             velocity_embeding = self.velocity_dict['velocity_trunk'](specgram_db_pool)
             velocity_pred = self.velocity_dict['velocity_head'](velocity_embeding)
@@ -215,7 +216,7 @@ class OnsetsAndFrames(nn.Module):
             'velocity': torch.clip(velocity_label, 0, 0)
         }
         losses = {}
-        if 'onset' in SUB_NETS:
+        if 'onset' in self.config['SUB_NETS']:
             predictions['onset'] = results[idx].reshape(*onset_label.shape)
             # [b x T x 88]
             onset_ref_soft = onset_label.clone()
@@ -223,11 +224,11 @@ class OnsetsAndFrames(nn.Module):
             losses['loss/onset'] = losses['loss/onset'].mean()
             # losses['loss/onset'] = F.binary_cross_entropy(predictions['onset'], onset_label)
             idx += 1
-        if 'offset' in SUB_NETS:
+        if 'offset' in self.config['SUB_NETS']:
             predictions['offset'] = results[idx].reshape(*offset_label.shape)
             losses['loss/offset'] = F.binary_cross_entropy(predictions['offset'], offset_label)
             idx += 1
-        if 'frame' in SUB_NETS:
+        if 'frame' in self.config['SUB_NETS']:
             predictions['frame'] = results[idx].reshape(*frame_label.shape)
             y_pred = torch.clip(predictions['frame'], 1e-4, 1 - 1e-4)
             y_ref = frame_label 
@@ -235,7 +236,7 @@ class OnsetsAndFrames(nn.Module):
             # losses['loss/frame'] = losses['loss/frame'].mean()
             losses['loss/frame'] = F.binary_cross_entropy(predictions['frame'], frame_label)
             idx += 1
-        if 'velocity' in SUB_NETS:
+        if 'velocity' in self.config['SUB_NETS']:
             predictions['velocity'] = results[idx].reshape(*velocity_label.shape)
             losses['loss/velocity'] = self.velocity_loss(predictions['velocity'], velocity_label, onset_label)
 
