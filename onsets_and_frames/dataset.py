@@ -33,11 +33,10 @@ def max_pooling(x, pooling_size):
 
 
 class PianoRollAudioDataset(Dataset):
-    def __init__(self, path, groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE):
+    def __init__(self, path, groups=None, sequence_length=None, seed=42):
         self.path = path
         self.groups = groups if groups is not None else self.available_groups()
         self.sequence_length = sequence_length
-        self.device = device
         self.random = np.random.RandomState(seed)
 
         self.data = []
@@ -189,8 +188,8 @@ class PianoRollAudioDataset(Dataset):
 
 class MAESTRO(PianoRollAudioDataset):
 
-    def __init__(self, path='/home/'+os.getlogin()+'/2T/vvx/piano_transcription/data/maestro-v3.0.0', groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE):
-        super().__init__(path, groups if groups is not None else ['train'], sequence_length, seed, device)
+    def __init__(self, path='/home/'+os.getlogin()+'/2T/vvx/piano_transcription/data/maestro-v3.0.0', groups=None, sequence_length=None, seed=42):
+        super().__init__(path, groups if groups is not None else ['train'], sequence_length, seed)
 
     @classmethod
     def available_groups(cls):
@@ -225,8 +224,8 @@ class MAESTRO(PianoRollAudioDataset):
 
 
 class MAPS(PianoRollAudioDataset):
-    def __init__(self, path='data/MAPS', groups=None, sequence_length=None, seed=42, device=DEFAULT_DEVICE):
-        super().__init__(path, groups if groups is not None else ['ENSTDkAm', 'ENSTDkCl'], sequence_length, seed, device)
+    def __init__(self, path='data/MAPS', groups=None, sequence_length=None, seed=42):
+        super().__init__(path, groups if groups is not None else ['ENSTDkAm', 'ENSTDkCl'], sequence_length, seed)
 
     @classmethod
     def available_groups(cls):
@@ -245,8 +244,8 @@ class MAPS(PianoRollAudioDataset):
 
 
 class NotLabeledDataset(PianoRollAudioDataset):
-    def __init__(self, path='data/NotLabeled', groups=['all'], sequence_length=None, seed=42, device=DEFAULT_DEVICE):
-        super().__init__(path, groups, sequence_length, seed, device)
+    def __init__(self, path='data/NotLabeled', groups=['all'], sequence_length=None, seed=42):
+        super().__init__(path, groups, sequence_length, seed)
 
     @classmethod
     def available_groups(cls):

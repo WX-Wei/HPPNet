@@ -39,6 +39,14 @@ class Squeeze(nn.Module):
     def forward(self, x):
         return torch.squeeze(x, self.dim)
 
+class Unsqueeze(nn.Module):
+    def __init__(self, dim):
+        super(Unsqueeze, self).__init__()
+        self.dim = dim
+    def forward(self, x):
+        return torch.unsqueeze(x, self.dim)
+
+
 class Permute(nn.Module):
     def __init__(self, dims):
         super(Permute, self).__init__()
@@ -86,20 +94,31 @@ class ConvStack(nn.Module):
         x = self.fc(x)
         return x
 
-
+       
 
 
 class OnsetsAndFrames(nn.Module):
     def get_head(self, type, model_size):
         heads = {
             'FB-LSTM': FrqeBinLSTM(model_size, 1, model_size) ,
-            'Conv': nn.Sequential(nn.Conv2d(model_size, 1, 1), nn.Sigmoid())
+            'Conv': nn.Sequential(nn.Conv2d(model_size, 1, 1), nn.Sigmoid()),
+            # [B x model_size x T x 88]
+            'LSTM':nn.Sequential(
+                nn.Conv2d(model_size, 1, 1), # => [B x 1 x T x 88]
+                nn.ReLU(),
+                Squeeze(dim=1), # => [B x T x 88]
+                BiLSTM(88,model_size//2), # => [B x T x model_size]
+                nn.Linear(model_size, 88), # => [B x T x 88]
+                nn.Sigmoid(),
+                Unsqueeze(dim=1) # =>[B x 1 x T x 88]
+            )
         }
         return heads[type]
     def __init__(self, input_features, output_features, config):
         super().__init__()
 
         self.config = config
+        self.frame_num = config['sequence_length'] // HOP_LENGTH
         
 
         model_size = config['model_size']
@@ -136,7 +155,7 @@ class OnsetsAndFrames(nn.Module):
 
     def forward(self, waveforms):
 
-        waveforms = waveforms.to(DEFAULT_DEVICE)
+        waveforms = waveforms.to(self.config['device'])
 
 
         # => [n_mel x T] => [T x n_mel]
@@ -196,8 +215,6 @@ class OnsetsAndFrames(nn.Module):
         offset_label = batch['offset']
         frame_label = batch['frame']
         velocity_label = batch['velocity']
-
-        self.frame_num = frame_label.size()[-2]
 
         audio_label_reshape = audio_label.reshape(-1, audio_label.shape[-1])#[:, :-1]
         # => [n_mel x T] => [T x n_mel]

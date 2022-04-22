@@ -16,6 +16,8 @@ import torch.cuda
 import torchaudio
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
+import torchsummary
+
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from random_words import RandomWords
@@ -64,10 +66,11 @@ def config():
     validation_length = sequence_length
     validation_interval = 400
 
-    ex.observers.append(FileStorageObserver.create(logdir))
+    ex.file_observer = FileStorageObserver.create(logdir)
+    ex.observers.append(ex.file_observer)
+
 
     training_size = 1.0 # [1.0, 0.3, 0.1]
-
 
 
 @ex.config
@@ -154,7 +157,15 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
             optimizers[subnet].load_state_dict(torch.load(os.path.join(logdir, f'last-optimizer-state-{subnet}.pt')))
             
+    # summary
+    # torchsummary.summary(model, input_size=(1, 16000*4, ), batch_size=1, device='cpu')
+    # writer.add_graph(model, torch.zeros([2, 16000*20]))
     summary(model)
+    summary_path = ex.file_observer.basedir + '/model_summary.txt'
+    summary(model, summary_path)
+    ex.add_artifact(summary_path)
+    ex.add_artifact(ex.file_observer.basedir + '/cout.txt')
+
     # scheduler = StepLR(optimizer, step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
     schedulers = {}
     for subnet in SUB_NETS:
