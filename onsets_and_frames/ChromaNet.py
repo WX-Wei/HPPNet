@@ -148,7 +148,7 @@ class ChromaNet(nn.Module):
 
 
 
-class HarmonicDilatedConv(nn.Module):
+class CNNTrunk(nn.Module):
     def get_conv2d_block(self, channel_in,channel_out, kernel_size = [1, 3], pool_size = [1, 1], dilation = [1, 1]):
         return nn.Sequential( 
             nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),

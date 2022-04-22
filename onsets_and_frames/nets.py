@@ -76,9 +76,25 @@ class FrqeBinLSTM(nn.Module):
         x = torch.sigmoid(x)
         return x
 
-
-
 class HarmonicDilatedConv(nn.Module):
+    def __init__(self, c_in, c_out) -> None:
+        super().__init__()
+        self.conv_3_1 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 48])
+        self.conv_3_2 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 76])
+        self.conv_3_3 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 96])
+        self.conv_3_4 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 111])
+        self.conv_3_5 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 124])
+        self.conv_3_6 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 135])
+        self.conv_3_7 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 144])
+        self.conv_3_8 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 152])
+    def forward(self, x):
+        x = self.conv_1(x) + self.conv_2(x) + self.conv_3(x) + self.conv_4(x) +\
+            self.conv_5(x) + self.conv_6(x) + self.conv_7(x) + self.conv_8(x)
+        x = torch.relu(x)
+        return x
+
+
+class CNNTrunk(nn.Module):
     def get_conv2d_block(self, channel_in,channel_out, kernel_size = [1, 3], pool_size = None, dilation = [1, 1]):
         if(pool_size == None):
             return nn.Sequential( 
@@ -97,7 +113,7 @@ class HarmonicDilatedConv(nn.Module):
                 # nn.InstanceNorm2d(channel_out)
             )
 
-    def __init__(self, c_in = 2, c_har = 16,  embedding = 128) -> None:
+    def __init__(self, c_in = 2, c_har = 16,  embedding = 128, trunk_type='HD-Conv', fixed_dilation = 24) -> None:
         super().__init__()
 
         self.block_1 = self.get_conv2d_block(c_in, c_har, kernel_size=5)
@@ -106,15 +122,13 @@ class HarmonicDilatedConv(nn.Module):
         c3_out = embedding
 
         # self.block_3 = MRDC_Conv(c_har, 64, dilation_list=[48, 76, 96, 111, 124, 135, 144, 152, 159, 166])
-
-        self.conv_3_1 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same', dilation=[1, 48])
-        self.conv_3_2 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same', dilation=[1, 76])
-        self.conv_3_3 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same', dilation=[1, 96])
-        self.conv_3_4 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same', dilation=[1, 111])
-        self.conv_3_5 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same', dilation=[1, 124])
-        self.conv_3_6 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same', dilation=[1, 135])
-        self.conv_3_7 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same', dilation=[1, 144])
-        self.conv_3_8 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same', dilation=[1, 152])
+        
+        if(trunk_type == 'Conv'):
+            self.conv_3 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same')
+        elif(trunk_type == 'HD-Conv'):
+            self.conv_3 = HarmonicDilatedConv(c_har, c3_out)
+        elif(trunk_type == 'SD-Conv'):
+            self.conv_3 = nn.Conv2d(c_har, c3_out, [1, 8], padding='same', dilation=[1, fixed_dilation])
 
         self.block_4 = self.get_conv2d_block(c3_out, c3_out, pool_size=[1, 4], dilation=[1, 48])
         self.block_5 = self.get_conv2d_block(c3_out, c3_out, dilation=[1, 12])
@@ -173,12 +187,7 @@ class HarmonicDilatedConv(nn.Module):
 
         x = self.block_1(log_gram_db)
         x = self.block_2(x)
-
-
-        x = self.conv_3_1(x) + self.conv_3_2(x) + self.conv_3_3(x) + self.conv_3_4(x) + self.conv_3_5(x) + self.conv_3_6(x) + self.conv_3_7(x) + self.conv_3_8(x)
-        # x = self.block_3(x)
-        x = torch.relu(x)
-
+        x = self.conv_3(x)
         x = self.block_4(x)
         x = self.block_5(x)
         # => [b x ch x T x 88]

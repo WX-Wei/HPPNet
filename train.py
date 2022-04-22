@@ -80,6 +80,8 @@ def model_config():
     head_type = 'FB-LSTM' # 'LSTM', 'Conv'
     trunk_type = 'HD-Conv' # 'SD-Conv', 'Conv'
 
+    fixed_dilation = 24
+
     model_size = 128
 
 
@@ -91,7 +93,10 @@ def model_config():
 def baseline_onsets_and_frames():
     model_name = 'onsets&frames'
 
-    
+@ex.command
+def empty_cmd(device = 'cpu'):
+    print('empty command.')
+    device='cpu'
 
 
 ex.main_locals = locals()

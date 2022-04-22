@@ -12,7 +12,7 @@ import torchaudio
 from .lstm import BiLSTM
 from .mel import melspectrogram
 
-from .nets import  HarmonicDilatedConv, FrqeBinLSTM
+from .nets import  CNNTrunk, FrqeBinLSTM
 
 from .constants import *
 
@@ -136,19 +136,19 @@ class OnsetsAndFrames(nn.Module):
 
         if 'onset' in self.config['SUB_NETS']:
             self.onset_dict = nn.ModuleDict({
-                'onset_trunk': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
+                'onset_trunk': CNNTrunk(c_in=2, c_har=16, embedding=model_size, trunk_type=trunk_type),
                 'onset_head': self.get_head(head_type, model_size)
             })
             self.sub_nets['onset'] = self.onset_dict
         if 'frame' in self.config['SUB_NETS']:
             self.frame_dict = nn.ModuleDict({
-                'frame_trunk': HarmonicDilatedConv(c_in=2, c_har=16, embedding=model_size),
+                'frame_trunk': CNNTrunk(c_in=2, c_har=16, embedding=model_size, trunk_type=trunk_type),
                 'frame_head': self.get_head(head_type, model_size*2)
             })
             self.sub_nets['frame'] = self.frame_dict
         if 'velocity' in self.config['SUB_NETS']:
             self.velocity_dict = nn.ModuleDict({
-                'velocity_trunk': HarmonicDilatedConv(c_in=2, c_har=4, embedding=4),
+                'velocity_trunk': CNNTrunk(c_in=2, c_har=4, embedding=4, trunk_type=trunk_type),
                 'velocity_head': self.get_head(head_type, 4)
             })
             self.sub_nets['velocity'] = self.velocity_dict
