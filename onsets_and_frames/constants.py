@@ -18,6 +18,6 @@ WINDOW_LENGTH = 2048
 N_HAR = 8
 BINS_PER_SEMITONE = 4
 
-# DEFAULT_DEVICE =  'cuda' if torch.cuda.is_available() else 'cpu'
+DEFAULT_DEVICE =  'cuda' if torch.cuda.is_available() else 'cpu'
 
 

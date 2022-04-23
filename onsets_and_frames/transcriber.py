@@ -55,49 +55,10 @@ class Permute(nn.Module):
         return torch.permute(x, self.dims)
 
 
-class ConvStack(nn.Module):
-    def __init__(self, input_features, output_features):
-        super().__init__()
-
-        # input is batch_size * 1 channel * frames * input_features
-        self.cnn = nn.Sequential(
-            # layer 0
-            nn.Conv2d(1, output_features // 16, (3, 3), padding=1),
-            nn.BatchNorm2d(output_features // 16),
-            nn.ReLU(),
-            # layer 1
-            nn.Conv2d(output_features // 16, output_features // 16, (3, 3), padding=1),
-            nn.BatchNorm2d(output_features // 16),
-            nn.ReLU(),
-            # layer 2
-            nn.MaxPool2d((1, 2)),
-            nn.Dropout(0.25),
-            nn.Conv2d(output_features // 16, output_features // 8, (3, 3), padding=1),
-            nn.BatchNorm2d(output_features // 8),
-            nn.ReLU(),
-            # layer 3
-            nn.MaxPool2d((1, 2)),
-            nn.Dropout(0.25),
-        )
-        self.fc = nn.Sequential(
-            nn.Linear((output_features // 8) * (input_features // 4), output_features),
-            nn.Dropout(0.5)
-        )
-
-    def forward(self, mel):
-        # add channel dimention
-        x = mel.view(mel.size(0), 1, mel.size(1), mel.size(2))
-        # =>
-        x = self.cnn(x)
-        # [C x T x F] => [T x C x F] => [T x (C*F)]
-        x = x.transpose(1, 2).flatten(-2)
-        x = self.fc(x)
-        return x
-
        
 
 
-class OnsetsAndFrames(nn.Module):
+class HARPIST(nn.Module):
     def get_head(self, type, model_size):
         heads = {
             'FB-LSTM': FrqeBinLSTM(model_size, 1, model_size) ,
@@ -126,10 +87,6 @@ class OnsetsAndFrames(nn.Module):
         trunk_type = config['trunk_type']
         sequence_model = lambda input_size, output_size: BiLSTM(input_size, output_size // 2)
 
-        global to_cqt
-        global to_log_specgram
-        to_cqt = to_cqt.to(config['device'])
-        to_log_specgram = to_log_specgram.to(config['device'])
         self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
 
         self.sub_nets = {}
@@ -156,7 +113,10 @@ class OnsetsAndFrames(nn.Module):
     def forward(self, waveforms):
 
         waveforms = waveforms.to(self.config['device'])
-
+        global to_cqt
+        global to_log_specgram
+        to_cqt = to_cqt.to(self.config['device'])
+        to_log_specgram = to_log_specgram.to(self.config['device'])
 
         # => [n_mel x T] => [T x n_mel]
         # mel = melspectrogram(waveforms).transpose(-1, -2)[:, :self.frame_num, :]

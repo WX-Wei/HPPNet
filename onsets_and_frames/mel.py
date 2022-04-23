@@ -99,4 +99,4 @@ class MelSpectrogram(torch.nn.Module):
 
 # the default melspectrogram converter across the project
 melspectrogram = MelSpectrogram(N_MELS, SAMPLE_RATE, WINDOW_LENGTH, HOP_LENGTH, mel_fmin=MEL_FMIN, mel_fmax=MEL_FMAX)
-
+melspectrogram.to(DEFAULT_DEVICE)

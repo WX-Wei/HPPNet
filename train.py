@@ -41,7 +41,7 @@ ex.tags = []
 def config():
     logdir = 'runs/transcriber-' + time_str
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    iterations = 500*1000
+    iterations = 200*1000
     resume_iteration = None
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
@@ -84,6 +84,15 @@ def model_config():
 
     model_size = 128
 
+@ex.named_config
+# baseline 'onsets&frames'
+def train_baseline():
+    SUB_NETS = ['all']
+    model_name='onsets&frames'
+    model_size = 48 * 16
+    checkpoint_interval = 10000
+
+
 
 #####################################
 # ablation study
@@ -105,7 +114,7 @@ ex.main_locals = locals()
 @ex.automain
 def train(logdir, device, iterations, resume_iteration, checkpoint_interval, train_on, batch_size, sequence_length,
            learning_rate, learning_rate_decay_steps, learning_rate_decay_rate, leave_one_out,
-          clip_gradient_norm, validation_length, validation_interval):
+          clip_gradient_norm, validation_length, validation_interval, model_name):
     print_config(ex.current_run)
 
     SUB_NETS = ex.current_run.config['SUB_NETS']
@@ -148,7 +157,13 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     optimizers = {}
     if resume_iteration is None:
-        model = OnsetsAndFrames(N_MELS, MAX_MIDI - MIN_MIDI + 1, ex.current_run.config).to(device)
+        if(model_name=='onsets&frames'):
+            model = OnsetsAndFrames(N_MELS, MAX_MIDI - MIN_MIDI + 1).to(device)
+            model.sub_nets = {}
+            model.sub_nets['all'] = torch.nn.ModuleList([x for x in  model.modules()])
+        else:
+            model = HARPIST(N_MELS, MAX_MIDI - MIN_MIDI + 1, ex.current_run.config).to(device)
+
         # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
         for subnet in SUB_NETS:
             optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
@@ -191,6 +206,10 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         predictions, losses = model.run_on_batch(batch)
 
         loss = sum(losses.values())
+
+        if(model_name=='onsets&frames'):
+            losses[f'loss/all'] = loss
+        
         # optimizer.zero_grad()
         # loss.backward()
         # optimizer.step()
