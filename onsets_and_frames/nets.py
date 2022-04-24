@@ -79,14 +79,14 @@ class FrqeBinLSTM(nn.Module):
 class HarmonicDilatedConv(nn.Module):
     def __init__(self, c_in, c_out) -> None:
         super().__init__()
-        self.conv_3_1 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 48])
-        self.conv_3_2 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 76])
-        self.conv_3_3 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 96])
-        self.conv_3_4 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 111])
-        self.conv_3_5 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 124])
-        self.conv_3_6 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 135])
-        self.conv_3_7 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 144])
-        self.conv_3_8 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 152])
+        self.conv_1 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 48])
+        self.conv_2 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 76])
+        self.conv_3 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 96])
+        self.conv_4 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 111])
+        self.conv_5 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 124])
+        self.conv_6 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 135])
+        self.conv_7 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 144])
+        self.conv_8 = nn.Conv2d(c_in, c_out, [1, 3], padding='same', dilation=[1, 152])
     def forward(self, x):
         x = self.conv_1(x) + self.conv_2(x) + self.conv_3(x) + self.conv_4(x) +\
             self.conv_5(x) + self.conv_6(x) + self.conv_7(x) + self.conv_8(x)

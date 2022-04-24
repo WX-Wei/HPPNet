@@ -79,7 +79,7 @@ class HARPIST(nn.Module):
         super().__init__()
 
         self.config = config
-        self.frame_num = config['sequence_length'] // HOP_LENGTH
+        # self.frame_num = config['sequence_length'] // HOP_LENGTH
         
 
         model_size = config['model_size']
@@ -123,8 +123,8 @@ class HARPIST(nn.Module):
 
         # => [b x T x 352]
         # log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
-        cqt = to_cqt(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
-        log_specgram = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
+        cqt = to_cqt(waveforms).swapaxes(1, 2).float()
+        log_specgram = to_log_specgram(waveforms).swapaxes(1, 2).float()
         # log_specgram_2 = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
         
         cqt_db = self.amplitude_to_db(cqt)
@@ -133,6 +133,13 @@ class HARPIST(nn.Module):
 
         # => [b x 2 x T x 352]
         specgram_db = torch.stack([log_specgram_db, cqt_db], dim=1)
+        specgram_db = specgram_db[:, :, :self.frame_num, :]
+        pad_len = self.frame_num - specgram_db.size()[2]
+        if(pad_len > 0):
+            print(f'frame len < {self.frame_num}, zero_pad_len:{pad_len}')
+            # => [B x 2 x T x 352]
+            specgram_db = F.pad(specgram_db, [0, 0, 0, pad_len], mode='replicate')
+            assert specgram_db.size()[2] == self.frame_num
         # specgram_db = cqt_db
 
         # activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(specgram_db)
@@ -156,7 +163,8 @@ class HARPIST(nn.Module):
             # frame_pred = torch.squeeze(frame_pred, dim=1)
             # [B x 1 x T/2 x 88] => [B x 1 x T x 88]
             # frame_pred = torch.repeat_interleave(frame_pred, 2, dim=2)
-            frame_pred = F.upsample(frame_pred, scale_factor=[2,1], mode='bilinear')
+            # frame_pred = F.upsample(frame_pred, scale_factor=[2,1], mode='bilinear')
+            frame_pred = F.upsample(frame_pred, size=self.piano_roll_size, mode='bilinear')
             results.append(frame_pred)
 
         if 'velocity' in self.config['SUB_NETS']:
@@ -164,7 +172,8 @@ class HARPIST(nn.Module):
             velocity_embeding = self.velocity_dict['velocity_trunk'](specgram_db_pool)
             velocity_pred = self.velocity_dict['velocity_head'](velocity_embeding)
             # velocity_pred = torch.squeeze(velocity_pred, dim=1)
-            velocity_pred = F.upsample(velocity_pred, scale_factor=[2,1], mode='bilinear')
+            velocity_pred = F.upsample(velocity_pred, size=self.piano_roll_size, mode='bilinear')
+
             results.append(velocity_pred)
         # return onset_pred, offset_pred, activation_pred, frame_pred, velocity_pred
         return results
@@ -175,6 +184,9 @@ class HARPIST(nn.Module):
         offset_label = batch['offset']
         frame_label = batch['frame']
         velocity_label = batch['velocity']
+
+        self.frame_num = frame_label.size()[-2]
+        self.piano_roll_size = frame_label.size()[-2:]
 
         audio_label_reshape = audio_label.reshape(-1, audio_label.shape[-1])#[:, :-1]
         # => [n_mel x T] => [T x n_mel]

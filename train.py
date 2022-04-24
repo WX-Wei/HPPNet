@@ -12,6 +12,7 @@ from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 import torch
+import torch.utils.data
 import torch.cuda
 import torchaudio
 import torchvision
@@ -29,11 +30,14 @@ rw = RandomWords()
 random_word_str = rw.random_word()
 time_str = datetime.now().strftime('%y%m%d-%H%M%S') + '_' + random_word_str
 ex = Experiment('train_transcriber')
+ex.time_str = time_str
 
 mongo_ob = MongoObserver.create(url='10.177.55.66:7000', db_name='piano_transcription') #harmonic_net_mono
 ex.observers.append(mongo_ob)
 
 ex.tags = []
+
+
 
 
 
@@ -66,6 +70,8 @@ def config():
     validation_length = sequence_length
     validation_interval = 400
 
+    test_interval= None
+
     ex.file_observer = FileStorageObserver.create(logdir)
     ex.observers.append(ex.file_observer)
 
@@ -85,12 +91,22 @@ def model_config():
     model_size = 128
 
 @ex.named_config
+def train_with_test():
+    # validation_interval = 50
+    test_interval = 100
+
+    test_onset_threshold = 0.4
+    test_frame_threshold = 0.3
+
+@ex.named_config
 # baseline 'onsets&frames'
 def train_baseline():
     SUB_NETS = ['all']
     model_name='onsets&frames'
     model_size = 48 * 16
     checkpoint_interval = 10000
+
+    # batch_size = 2
 
 
 
@@ -114,7 +130,9 @@ ex.main_locals = locals()
 @ex.automain
 def train(logdir, device, iterations, resume_iteration, checkpoint_interval, train_on, batch_size, sequence_length,
            learning_rate, learning_rate_decay_steps, learning_rate_decay_rate, leave_one_out,
-          clip_gradient_norm, validation_length, validation_interval, model_name):
+          clip_gradient_norm, validation_length, validation_interval, 
+          test_interval, test_onset_threshold, test_frame_threshold, 
+          model_name):
     print_config(ex.current_run)
 
     SUB_NETS = ex.current_run.config['SUB_NETS']
@@ -146,9 +164,15 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     if train_on == 'MAESTRO':
         dataset = MAESTRO(groups=train_groups, sequence_length=sequence_length)
         validation_dataset = MAESTRO(groups=validation_groups, sequence_length=sequence_length)
+        # test
+        test_dataset = MAESTRO(groups=['test'])
+        groups = test_dataset.groups
+        test_dataset = torch.utils.data.Subset(test_dataset, list(range(3)))
+        test_dataset.groups = groups
     else:
         dataset = MAPS(groups=['AkPnBcht', 'AkPnBsdf', 'AkPnCGdD', 'AkPnStgb', 'SptkBGAm', 'SptkBGCl', 'StbgTGd2'], sequence_length=sequence_length)
         validation_dataset = MAPS(groups=['ENSTDkAm', 'ENSTDkCl'], sequence_length=validation_length)
+        test_dataset = MAPS(groups=[['ENSTDkAm', 'ENSTDkCl']])
 
     loader = DataLoader(dataset, batch_size, shuffle=True, drop_last=True, num_workers=4)
 
@@ -248,6 +272,8 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             os.makedirs(dir_path, exist_ok=True)
             plt.imsave(dir_path + '/train_step_%d.png'%(i), frame_img.detach().cpu().numpy())
 
+        ##################################
+        # Validate
         if i % validation_interval == 0:
             model.eval()
             with torch.no_grad():
@@ -255,6 +281,37 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
                     writer.add_scalar('validation/' + key.replace(' ', '_'), np.mean(value), global_step=i)
                     ex.log_scalar('validation/' + key.replace(' ', '_'), np.mean(value), i)
             model.train()
+
+        ##################################
+        # Test
+        if not test_interval is None:
+            if i % test_interval == 0:
+                model.eval()
+                clip_len = 10240
+                test_result = {}
+                test_result['step'] = i
+                test_result['time'] = datetime.now().strftime('%y%m%d-%H%M%S')
+                test_result['dataset'] = str(test_dataset)
+                test_result['dataset_group'] = test_dataset.groups
+                test_result['dataset_len'] = len(test_dataset)
+                test_result['clip_len'] = clip_len
+                test_result['onset_threshold'] = test_onset_threshold
+                test_result['frame_threshold'] = test_frame_threshold
+                with torch.no_grad():
+                    eval_result =  evaluate(test_dataset, model, device,
+                        onset_threshold=test_onset_threshold, frame_threshold=test_frame_threshold,
+                        clip_len = clip_len,
+                        save_path=ex.current_run.config['logdir'] + f'/model-{i}-test'
+                    )
+                    for key, values in eval_result.items():
+                        mean_val = np.mean(values)
+                        # std_val = f"{np.mean(values):.4f} ± {np.std(values):.4f}"
+                        label = 'test/' + key.replace(' ', '_')
+                        writer.add_scalar(label, mean_val, global_step=i)
+                        ex.log_scalar(label, mean_val, i)
+                        test_result[label] = mean_val
+                ex.info[f'test_step_{i}'] = test_result
+                model.train()
 
         if i % checkpoint_interval == 0:
             torch.save(model, os.path.join(logdir, f'model-{i}.pt'))

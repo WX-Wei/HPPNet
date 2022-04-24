@@ -49,6 +49,8 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
             offset += 1
             if offset == onsets.shape[0]:
                 break
+            if(offset - frame > 1000): # ignore more than 1000 frames. ()
+                break
 
         # consider all pred onset has a note.
         # if offset > onset:
