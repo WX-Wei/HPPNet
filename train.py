@@ -77,7 +77,7 @@ def config():
     ex.observers.append(FileStorageObserver.create(logdir))
 
 
-    training_size = 1.0 # [1.0, 0.3, 0.1]
+    training_size = 1.0 # [1.0, 0.3, 0.1] preportion used for training in training set.
 
     note = ""
 
@@ -93,7 +93,7 @@ def model_config():
 
     model_size = 128
 
-@ex.named_config
+@ex.config
 def train_with_test():
     # validation_interval = 50
     test_interval = 50000
@@ -101,13 +101,20 @@ def train_with_test():
     test_onset_threshold = 0.4
     test_frame_threshold = 0.3
 
+@ex.config
+def train_without_test():
+    test_interval = None
+
 @ex.named_config
 # baseline 'onsets&frames'
 def train_baseline():
     SUB_NETS = ['all']
     model_name='onsets&frames'
     model_size = 48 * 16
+    iterations = 500*1000
     checkpoint_interval = 10000
+
+
 
     # batch_size = 2
 
@@ -135,6 +142,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
            learning_rate, learning_rate_decay_steps, learning_rate_decay_rate, leave_one_out,
           clip_gradient_norm, validation_length, validation_interval, 
           test_interval, test_onset_threshold, test_frame_threshold, 
+          training_size,
           model_name):
     print_config(ex.current_run)
 
@@ -169,15 +177,25 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     if train_on == 'MAESTRO':
         dataset = MAESTRO(groups=train_groups, sequence_length=sequence_length)
         validation_dataset = MAESTRO(groups=validation_groups, sequence_length=sequence_length)
+        
         # test
         test_dataset = MAESTRO(groups=['test'])
-        groups = test_dataset.groups
-        test_dataset = torch.utils.data.Subset(test_dataset, list(range(3)))
-        test_dataset.groups = groups
+        
+        # groups = test_dataset.groups
+        # test_dataset = torch.utils.data.Subset(test_dataset, list(range(3)))
+        # test_dataset.groups = groups
     else:
         dataset = MAPS(groups=['AkPnBcht', 'AkPnBsdf', 'AkPnCGdD', 'AkPnStgb', 'SptkBGAm', 'SptkBGCl', 'StbgTGd2'], sequence_length=sequence_length)
         validation_dataset = MAPS(groups=['ENSTDkAm', 'ENSTDkCl'], sequence_length=validation_length)
         test_dataset = MAPS(groups=[['ENSTDkAm', 'ENSTDkCl']])
+
+    train_idx = [int(x/training_size) for x in range(int(len(dataset)*training_size))]
+    ex.info['training_files'] = dataset.files('train')
+    ex.info['training_idx'] = train_idx
+    dataset = torch.utils.data.Subset(dataset, train_idx)
+
+    ex.info['validation_set_files'] = validation_dataset.files('validation')
+    ex.info['test_set_files'] = test_dataset.files('test')
 
     loader = DataLoader(dataset, batch_size, shuffle=True, drop_last=True, num_workers=4)
 
