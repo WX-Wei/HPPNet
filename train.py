@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from re import sub, subn
+import copy
 
 import numpy as np
 from sacred import Experiment
@@ -72,11 +73,13 @@ def config():
 
     test_interval= None
 
-    ex.file_observer = FileStorageObserver.create(logdir)
-    ex.observers.append(ex.file_observer)
+    
+    ex.observers.append(FileStorageObserver.create(logdir))
 
 
     training_size = 1.0 # [1.0, 0.3, 0.1]
+
+    note = ""
 
 
 @ex.config
@@ -93,7 +96,7 @@ def model_config():
 @ex.named_config
 def train_with_test():
     # validation_interval = 50
-    test_interval = 100
+    test_interval = 50000
 
     test_onset_threshold = 0.4
     test_frame_threshold = 0.3
@@ -118,10 +121,10 @@ def train_baseline():
 def baseline_onsets_and_frames():
     model_name = 'onsets&frames'
 
-@ex.command
-def empty_cmd(device = 'cpu'):
-    print('empty command.')
-    device='cpu'
+# @ex.command
+# def empty_cmd(device = 'cpu'):
+#     print('empty command.')
+#     device='cpu'
 
 
 ex.main_locals = locals()
@@ -135,7 +138,9 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
           model_name):
     print_config(ex.current_run)
 
-    SUB_NETS = ex.current_run.config['SUB_NETS']
+    config = ex.current_run.config
+
+    SUB_NETS = config['SUB_NETS']
 
 
     # add source files to ex
@@ -152,7 +157,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     os.makedirs(logdir, exist_ok=True)
     writer = SummaryWriter(logdir)
 
-
+    ex.basedir = ex.current_run.observers[1].basedir
 
     train_groups, validation_groups = ['train'], ['validation']
 
@@ -186,7 +191,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             model.sub_nets = {}
             model.sub_nets['all'] = torch.nn.ModuleList([x for x in  model.modules()])
         else:
-            model = HARPIST(N_MELS, MAX_MIDI - MIN_MIDI + 1, ex.current_run.config).to(device)
+            model = HARPIST(N_MELS, MAX_MIDI - MIN_MIDI + 1, config).to(device)
 
         # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
         for subnet in SUB_NETS:
@@ -204,11 +209,10 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     # summary
     # torchsummary.summary(model, input_size=(1, 16000*4, ), batch_size=1, device='cpu')
     # writer.add_graph(model, torch.zeros([2, 16000*20]))
-    summary(model)
-    summary_path = ex.file_observer.basedir + '/model_summary.txt'
+    # summary(model)
+    summary_path = ex.basedir + '/model_summary.txt'
     summary(model, summary_path)
     ex.add_artifact(summary_path)
-    ex.add_artifact(ex.file_observer.basedir + '/cout.txt')
 
     # scheduler = StepLR(optimizer, step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
     schedulers = {}
@@ -301,7 +305,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
                     eval_result =  evaluate(test_dataset, model, device,
                         onset_threshold=test_onset_threshold, frame_threshold=test_frame_threshold,
                         clip_len = clip_len,
-                        save_path=ex.current_run.config['logdir'] + f'/model-{i}-test'
+                        save_path=config['logdir'] + f'/model-{i}-test'
                     )
                     for key, values in eval_result.items():
                         mean_val = np.mean(values)
@@ -309,7 +313,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
                         label = 'test/' + key.replace(' ', '_')
                         writer.add_scalar(label, mean_val, global_step=i)
                         ex.log_scalar(label, mean_val, i)
-                        test_result[label] = mean_val
+                        test_result[label] = "%.2f"%(mean_val*100)
                 ex.info[f'test_step_{i}'] = test_result
                 model.train()
 
