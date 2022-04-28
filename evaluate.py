@@ -14,6 +14,7 @@ from tqdm import tqdm
 from datetime import datetime
 import matplotlib.pyplot as plt
 import h5py
+import pandas as pd
 
 from torch.utils.data import Subset 
 
@@ -49,7 +50,10 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
                 for key in pred:
                     pred[key] = torch.tensor(h5[key][:]).to(device)
                 for key in losses:
-                    losses[key] = torch.tensor(h5[key][()]).to(device)
+                    if(key in h5):
+                        losses[key] = torch.tensor(h5[key][()]).to(device)
+                    else:
+                        losses[key] = 0
         # get new pred
         else:
             n_step =  label['onset'].shape[-2]
@@ -106,7 +110,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
                         h5[key] = item.cpu().numpy()
 
         for key, loss in losses.items():
-            metrics[key].append(loss.item())
+            metrics[key].append(loss)
 
         for key, value in pred.items():
             value.squeeze_(0).relu_()
@@ -240,7 +244,7 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
         save_path = os.path.join(model_file[:-3] + "_evaluate", dataset, group_str)
 
     dataset_class = getattr(dataset_module, dataset)
-    kwargs = {'sequence_length': sequence_length, 'device': device}
+    kwargs = {'sequence_length': sequence_length} # , 'device': device
     if dataset_group is not None:
         kwargs['groups'] = [dataset_group]
     dataset = dataset_class(**kwargs)
@@ -272,6 +276,32 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
         with open(result_path, 'a') as f:
             f.write(res)
 
+        # save metrics to csv
+        column_dict = {}
+        for key, values in metrics.items():
+            # metric/note-with-offsets-and-velocity/f1
+            if(key.find('loss') >= 0):
+                continue
+            new_key = key
+            replace = {'metric/':'', '-with':'', '-and':'', 'onsets': 'on', 'offsets':'off', 'velocity':'vel'}
+            for k,v in replace.items():
+                new_key = new_key.replace(k, v)
+            column_dict[new_key] = values
+        
+
+        column_dict['path'] = [os.path.split(str(data['path']))[-1] for data in dataset]
+        # __import__('remote_pdb').set_trace()
+        # print(column_dict)
+        df = pd.DataFrame.from_dict(column_dict)
+        # col_mean = df.mean(axis=0)
+        # col_mean['path'] = 'mean'
+        # df = df.append(col_mean, ignore_index=True)
+        # col_std = df.std(axis=0)
+        # col_std['path'] = 'std'
+        # df = df.append(col_std, ignore_index=True)
+        csv_path = os.path.join(save_path, 'metrics_result.csv')
+        print('save to :', csv_path)
+        df.to_csv(csv_path)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
