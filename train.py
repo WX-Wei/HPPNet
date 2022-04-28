@@ -79,7 +79,7 @@ def config():
 
     training_size = 1.0 # [1.0, 0.3, 0.1] preportion used for training in training set.
 
-    note = ""
+    notes = ""
 
 
 @ex.config
@@ -101,7 +101,7 @@ def train_with_test():
     test_onset_threshold = 0.4
     test_frame_threshold = 0.3
 
-@ex.config
+@ex.named_config
 def train_without_test():
     test_interval = None
 
@@ -112,7 +112,9 @@ def train_baseline():
     model_name='onsets&frames'
     model_size = 48 * 16
     iterations = 500*1000
-    checkpoint_interval = 10000
+    checkpoint_interval = 20000
+
+    batch_size=4
 
 
 
@@ -122,11 +124,6 @@ def train_baseline():
 
 #####################################
 # ablation study
-
-
-@ex.named_config
-def baseline_onsets_and_frames():
-    model_name = 'onsets&frames'
 
 # @ex.command
 # def empty_cmd(device = 'cpu'):
@@ -193,6 +190,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     ex.info['training_files'] = dataset.files('train')
     ex.info['training_idx'] = train_idx
     dataset = torch.utils.data.Subset(dataset, train_idx)
+    ex.info['train_num'] = len(dataset) 
 
     ex.info['validation_set_files'] = validation_dataset.files('validation')
     ex.info['test_set_files'] = test_dataset.files('test')
@@ -239,6 +237,8 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
     
 
     loop = tqdm(range(resume_iteration + 1, iterations + 1))
+    loop.set_description(config['model_name'] + '_' + random_word_str)
+    tqdm_dict = {}
     for i, batch in zip(loop, cycle(loader)):
 
         batch['audio'] = batch['audio'].to(device)
@@ -275,7 +275,9 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             writer.add_scalar(key, value.item(), global_step=i)
             ex.log_scalar(key, value.item(),i)
 
-        
+        if(i %10 == 0):
+            tqdm_dict['train/loss'] = loss.cpu().detach().numpy()
+            loop.set_postfix(tqdm_dict)
 
         if(i in [100, 1000, 2000, 4000, 8000] or i % 10000 == 0 ):
             frame_img_pred = torch.swapdims(predictions['frame'], 1, 2)
@@ -299,9 +301,14 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         if i % validation_interval == 0:
             model.eval()
             with torch.no_grad():
-                for key, value in evaluate(validation_dataset, model, device).items():
+                val_metrics = evaluate(validation_dataset, model, device)
+                for key, value in val_metrics.items():
                     writer.add_scalar('validation/' + key.replace(' ', '_'), np.mean(value), global_step=i)
                     ex.log_scalar('validation/' + key.replace(' ', '_'), np.mean(value), i)
+                tqdm_dict['onset_loss'] = val_metrics['validation/loss/onset']
+                tqdm_dict['frame_f1'] = val_metrics['validation/metric/frame/f1']
+                tqdm_dict['val_note_f1'] = val_metrics['validation/metric/note/f1']
+                loop.set_postfix(tqdm_dict)
             model.train()
 
         ##################################
