@@ -303,11 +303,12 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             with torch.no_grad():
                 val_metrics = evaluate(validation_dataset, model, device)
                 for key, value in val_metrics.items():
-                    writer.add_scalar('validation/' + key.replace(' ', '_'), np.mean(value), global_step=i)
-                    ex.log_scalar('validation/' + key.replace(' ', '_'), np.mean(value), i)
-                tqdm_dict['onset_loss'] = val_metrics['validation/loss/onset']
-                tqdm_dict['frame_f1'] = val_metrics['validation/metric/frame/f1']
-                tqdm_dict['val_note_f1'] = val_metrics['validation/metric/note/f1']
+                    mean_val = np.mean(value)
+                    writer.add_scalar('validation/' + key.replace(' ', '_'), mean_val, global_step=i)
+                    ex.log_scalar('validation/' + key.replace(' ', '_'), mean_val, i)
+                tqdm_dict['on_loss'] = '%.4f'%np.mean(val_metrics['loss/onset'])
+                tqdm_dict['f_f1'] = '%.1f'%np.mean(val_metrics['metric/frame/f1']) * 100
+                tqdm_dict['n_f1'] = '%.1f'%np.mean(val_metrics['metric/note/f1']) * 100
                 loop.set_postfix(tqdm_dict)
             model.train()
 
