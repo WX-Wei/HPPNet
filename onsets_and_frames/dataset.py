@@ -138,8 +138,15 @@ class PianoRollAudioDataset(Dataset):
             velocity: torch.ByteTensor, shape = [num_steps, midi_bins]
                 a matrix that contains MIDI velocity values at the frame locations
         """
+        
+        # h5_path = audio_path.replace('.flac', '.h5').replace('.wav', '.h5').replace('.mp3', '.h5')
 
-        h5_path = audio_path.replace('.flac', '.h5').replace('.wav', '.h5').replace('.mp3', '.h5')
+        root,basename = os.path.split(audio_path)
+        name, ext = os.path.splitext(basename)
+        h5_dir = os.path.join(root, '..', f'h5_hop{HOP_LENGTH}')
+        os.makedirs(h5_dir, exist_ok=True)
+        h5_path = os.path.join(h5_dir, name + '.h5')
+
         if os.path.exists(h5_path):
             return h5_path
 
