@@ -287,18 +287,8 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
             for k,v in replace.items():
                 new_key = new_key.replace(k, v)
             column_dict[new_key] = values
-        
-
         column_dict['path'] = [os.path.split(str(data['path']))[-1] for data in dataset]
-        # __import__('remote_pdb').set_trace()
-        # print(column_dict)
         df = pd.DataFrame.from_dict(column_dict)
-        # col_mean = df.mean(axis=0)
-        # col_mean['path'] = 'mean'
-        # df = df.append(col_mean, ignore_index=True)
-        # col_std = df.std(axis=0)
-        # col_std['path'] = 'std'
-        # df = df.append(col_std, ignore_index=True)
         csv_path = os.path.join(save_path, 'metrics_result.csv')
         print('save to :', csv_path)
         df.to_csv(csv_path)
