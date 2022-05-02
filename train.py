@@ -84,7 +84,9 @@ def config():
 
 @ex.config
 def model_config():
-    SUB_NETS = ['onset', 'frame', 'velocity']
+    SUB_NETS = ['onset_subnet', 'frame_subnet'] #['onset', 'frame', 'velocity']
+    onset_subnet_head_names = ['onset']
+    frame_subnet_head_names = ['frame', 'offset', 'velocity']
     model_name = "HPP" # modeling harmonic structure and pitch invariance in piano transcription
     head_type = 'FB-LSTM' # 'LSTM', 'Conv'
     trunk_type = 'HD-Conv' # 'SD-Conv', 'Conv'

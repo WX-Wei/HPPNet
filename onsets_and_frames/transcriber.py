@@ -54,12 +54,9 @@ class Permute(nn.Module):
     def forward(self, x):
         return torch.permute(x, self.dims)
 
-
-       
-
-
-class HARPIST(nn.Module):
-    def get_head(self, type, model_size):
+class Head(nn.Module):
+    def __init__(self, head_type, model_size) -> None:
+        super().__init__()
         heads = {
             'FB-LSTM': FrqeBinLSTM(model_size, 1, model_size) ,
             'Conv': nn.Sequential(nn.Conv2d(model_size, 1, 1), nn.Sigmoid()),
@@ -74,41 +71,75 @@ class HARPIST(nn.Module):
                 Unsqueeze(dim=1) # =>[B x 1 x T x 88]
             )
         }
-        return heads[type]
+        self.head = heads[head_type]
+    def forward(self, x):
+        # input: [B x model_size x T x 88]
+        # output: [B x 1 x T x 88]
+        y = self.head(x)
+        # y = torch.squeeze(y, dim=1)
+        return y
+
+class SubNet(nn.Module):
+    def __init__(self, model_size = 128, trunk_type = "HD-Conv", head_type = "FB-LSTM",  head_names = ['head'], concat = False, time_pooling = False) -> None:
+        super().__init__()
+        # Trunk
+        self.trunk = CNNTrunk(c_in=2, c_har=16, embedding=model_size, trunk_type=trunk_type)
+
+        # Heads
+        head_size = model_size
+        self.concat = concat
+        if(concat):
+            head_size *= 2
+        self.head_names = head_names
+        self.heads = nn.ModuleDict()
+        for name in head_names:
+            self.heads[name] = Head(head_type, head_size)
+
+        self.time_pooling = time_pooling
+       
+    def forward(self, x, hidden = None):
+        # input: [B x 2 x T x 352], [B x model_size x T x 88]
+        # output:
+        #   {"head_1": [B x T x 88], 
+        #    "head_2": [B x T x 88],...
+        # }
+        
+        if(self.time_pooling):
+            x = F.max_pool2d(x, [2,1])
+            src_size = hidden.size()
+            hidden = F.max_pool2d(hidden, [2,1])
+
+        # => [B x model_size x T x 88]
+        y = self.trunk(x)
+        hidden_out = y
+        if(self.concat):
+            y = torch.cat([hidden.detach(), y], dim=1)
+        output = {}
+        for head in self.head_names:
+            # => [B x 1 x T x 88]
+            output[head] = self.heads[head](y)
+            if(self.time_pooling):
+                output[head] = F.upsample(output[head], size=src_size[-2:], mode='bilinear')
+            output[head] = torch.squeeze(output[head], dim=1)
+
+        return output, hidden_out
+
+class HARPIST(nn.Module):
     def __init__(self, input_features, output_features, config):
         super().__init__()
-
         self.config = config
-        # self.frame_num = config['sequence_length'] // HOP_LENGTH
-        
-
         model_size = config['model_size']
         head_type = config['head_type']
         trunk_type = config['trunk_type']
-        sequence_model = lambda input_size, output_size: BiLSTM(input_size, output_size // 2)
 
         self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
 
-        self.sub_nets = {}
+        self.subnet_onset = SubNet(model_size, trunk_type, head_type, config['onset_subnet_head_names'])
+        self.subnet_frame = SubNet(model_size, trunk_type, head_type, config['frame_subnet_head_names'], concat=True, time_pooling=True)
 
-        if 'onset' in self.config['SUB_NETS']:
-            self.onset_dict = nn.ModuleDict({
-                'onset_trunk': CNNTrunk(c_in=2, c_har=16, embedding=model_size, trunk_type=trunk_type),
-                'onset_head': self.get_head(head_type, model_size)
-            })
-            self.sub_nets['onset'] = self.onset_dict
-        if 'frame' in self.config['SUB_NETS']:
-            self.frame_dict = nn.ModuleDict({
-                'frame_trunk': CNNTrunk(c_in=2, c_har=16, embedding=model_size, trunk_type=trunk_type),
-                'frame_head': self.get_head(head_type, model_size*2)
-            })
-            self.sub_nets['frame'] = self.frame_dict
-        if 'velocity' in self.config['SUB_NETS']:
-            self.velocity_dict = nn.ModuleDict({
-                'velocity_trunk': CNNTrunk(c_in=2, c_har=4, embedding=4, trunk_type=trunk_type),
-                'velocity_head': self.get_head(head_type, 4)
-            })
-            self.sub_nets['velocity'] = self.velocity_dict
+        self.sub_nets = {}
+        self.sub_nets['onset_subnet'] = self.subnet_onset
+        self.sub_nets['frame_subnet'] = self.subnet_frame
 
     def forward(self, waveforms):
 
@@ -142,40 +173,10 @@ class HARPIST(nn.Module):
             assert specgram_db.size()[2] == self.frame_num
         # specgram_db = cqt_db
 
-        # activation_pred, onset_pred, offset_pred, velocity_pred = self.frame_stack(specgram_db)
+        results, hidden = self.subnet_onset(specgram_db)
+        results_2 , _ = self.subnet_frame(specgram_db, hidden.detach())
+        results.update(results_2)
 
-        results = []
-        if 'onset' in self.config['SUB_NETS']:
-            # onset_pred = self.onset_stack(mel)
-            onset_embeding = self.onset_dict['onset_trunk'](specgram_db)
-            onset_pred = self.onset_dict['onset_head'](onset_embeding)
-            onset_pred = torch.clip(onset_pred, 1e-7, 1 - 1e-7)
-            results.append(onset_pred)
-
-        # down sampling time dim, frames pred don't need high time resolution.
-        specgram_db_pool = F.avg_pool2d(specgram_db, [2,1])
-        if 'frame' in self.config['SUB_NETS']:
-            frame_embeding = self.frame_dict['frame_trunk'](specgram_db_pool)
-            # => [B x (c_onset+c_frame) x T x 88]
-            onset_embeding_pool = F.max_pool2d(onset_embeding, [2,1])
-            stack_embeding = torch.cat([onset_embeding_pool.detach(), frame_embeding], dim=1)
-            frame_pred = self.frame_dict['frame_head'](stack_embeding)
-            # frame_pred = torch.squeeze(frame_pred, dim=1)
-            # [B x 1 x T/2 x 88] => [B x 1 x T x 88]
-            # frame_pred = torch.repeat_interleave(frame_pred, 2, dim=2)
-            # frame_pred = F.upsample(frame_pred, scale_factor=[2,1], mode='bilinear')
-            frame_pred = F.upsample(frame_pred, size=self.piano_roll_size, mode='bilinear')
-            results.append(frame_pred)
-
-        if 'velocity' in self.config['SUB_NETS']:
-            # velocity_pred = self.velocity_stack(mel)
-            velocity_embeding = self.velocity_dict['velocity_trunk'](specgram_db_pool)
-            velocity_pred = self.velocity_dict['velocity_head'](velocity_embeding)
-            # velocity_pred = torch.squeeze(velocity_pred, dim=1)
-            velocity_pred = F.upsample(velocity_pred, size=self.piano_roll_size, mode='bilinear')
-
-            results.append(velocity_pred)
-        # return onset_pred, offset_pred, activation_pred, frame_pred, velocity_pred
         return results
 
     def run_on_batch(self, batch):
@@ -197,7 +198,6 @@ class HARPIST(nn.Module):
         # => [T x 88]
         # onset_pred, offset_pred, _, frame_pred, velocity_pred = self(mel)
         results = self(audio_label_reshape)
-        idx = 0
         predictions = {
             'onset': torch.clip(onset_label, 0, 0),
             'offset': torch.clip(offset_label, 0, 0),
@@ -205,29 +205,30 @@ class HARPIST(nn.Module):
             'velocity': torch.clip(velocity_label, 0, 0)
         }
         losses = {}
-        if 'onset' in self.config['SUB_NETS']:
-            predictions['onset'] = results[idx].reshape(*onset_label.shape)
+        if 'onset' in results.keys():
+            predictions['onset'] = results['onset'].reshape(*onset_label.shape)
             # [b x T x 88]
-            onset_ref_soft = onset_label.clone()
             losses['loss/onset'] = - 2 * onset_label * torch.log(predictions['onset']) - ( 1 - onset_label) * torch.log(1-predictions['onset'])
             losses['loss/onset'] = losses['loss/onset'].mean()
             # losses['loss/onset'] = F.binary_cross_entropy(predictions['onset'], onset_label)
-            idx += 1
-        if 'offset' in self.config['SUB_NETS']:
-            predictions['offset'] = results[idx].reshape(*offset_label.shape)
+        if 'offset' in results.keys():
+            predictions['offset'] = results['offset'].reshape(*offset_label.shape)
             losses['loss/offset'] = F.binary_cross_entropy(predictions['offset'], offset_label)
-            idx += 1
-        if 'frame' in self.config['SUB_NETS']:
-            predictions['frame'] = results[idx].reshape(*frame_label.shape)
-            y_pred = torch.clip(predictions['frame'], 1e-4, 1 - 1e-4)
-            y_ref = frame_label 
-            # losses['loss/frame'] = - 10 * y_ref * torch.log(y_pred) - (1-y_ref)*torch.log(1-y_pred)  # F.binary_cross_entropy(predictions['frame'], frame_label)
-            # losses['loss/frame'] = losses['loss/frame'].mean()
+        if 'frame' in results.keys():
+            predictions['frame'] = results['frame'].reshape(*frame_label.shape)
             losses['loss/frame'] = F.binary_cross_entropy(predictions['frame'], frame_label)
-            idx += 1
-        if 'velocity' in self.config['SUB_NETS']:
-            predictions['velocity'] = results[idx].reshape(*velocity_label.shape)
+        if 'velocity' in results.keys():
+            predictions['velocity'] = results['velocity'].reshape(*velocity_label.shape)
             losses['loss/velocity'] = self.velocity_loss(predictions['velocity'], velocity_label, onset_label)
+
+
+        losses['loss/onset_subnet'] = 0
+        for head in self.config['onset_subnet_head_names']:
+            losses['loss/onset_subnet'] += losses['loss/' + head]
+
+        losses['loss/frame_subnet'] = 0
+        for head in self.config['frame_subnet_head_names']:
+            losses['loss/frame_subnet'] += losses['loss/' + head]
 
         # onset_pred,  _, frame_pred, velocity_pred = self(mel)
 
