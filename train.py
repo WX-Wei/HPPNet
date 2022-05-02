@@ -185,6 +185,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         dataset = MAPS(groups=['AkPnBcht', 'AkPnBsdf', 'AkPnCGdD', 'AkPnStgb', 'SptkBGAm', 'SptkBGCl', 'StbgTGd2'], sequence_length=sequence_length)
         validation_dataset = MAPS(groups=['ENSTDkAm', 'ENSTDkCl'], sequence_length=validation_length)
         test_dataset = MAPS(groups=[['ENSTDkAm', 'ENSTDkCl']])
+        # test_dataset = MAESTRO(groups=['test'])
 
     train_idx = [int(x/training_size) for x in range(int(len(dataset)*training_size))]
     ex.info['training_files'] = dataset.files('train')
@@ -303,12 +304,12 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             with torch.no_grad():
                 val_metrics = evaluate(validation_dataset, model, device)
                 for key, value in val_metrics.items():
-                    mean_val = np.mean(value)
+                    mean_val = torch.tensor(value).cpu().numpy().mean()
                     writer.add_scalar('validation/' + key.replace(' ', '_'), mean_val, global_step=i)
                     ex.log_scalar('validation/' + key.replace(' ', '_'), mean_val, i)
-                tqdm_dict['on_loss'] = '%.4f'%np.mean(val_metrics['loss/onset'])
-                tqdm_dict['f_f1'] = '%.1f'%np.mean(val_metrics['metric/frame/f1']) * 100
-                tqdm_dict['n_f1'] = '%.1f'%np.mean(val_metrics['metric/note/f1']) * 100
+                # tqdm_dict['on_loss'] = '%.4f'%np.mean(val_metrics['loss/onset'])
+                tqdm_dict['f_f1'] = '%.3f'%np.mean(val_metrics['metric/frame/f1'])
+                tqdm_dict['n_f1'] = '%.3f'%np.mean(val_metrics['metric/note/f1'])
                 loop.set_postfix(tqdm_dict)
             model.train()
 

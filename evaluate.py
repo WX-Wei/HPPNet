@@ -117,27 +117,27 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
 
 
         # #############################
-        # metrics of onset
-        onsets_pred = (pred['onset'] > onset_threshold).cpu().to(torch.float)
-        onsets_pred_pad = onsets_pred.clone()
-        onsets_pred_pad[:-1] += onsets_pred[1:]
-        onsets_pred_pad[1:] += onsets_pred[:-1]
-        onsets_pred_pad[:-2] += onsets_pred[2:]
-        onsets_pred_pad[2:] += onsets_pred[:-2]
-        onsets_pred_pad[:-3] += onsets_pred[3:]
-        onsets_pred_pad[3:] += onsets_pred[:-3]
-        onsets_pred_pad = torch.clip(onsets_pred_pad, 0, 1)
-        onset_pred_diff = torch.cat([onsets_pred[:1, :], onsets_pred[1:, :] - onsets_pred[:-1, :]], dim=0) == 1
-        onset_pred_diff = onset_pred_diff.to(torch.float)
-        onsets_ref = label['onset'].cpu().to(torch.float)
-        onset_ref_diff = torch.cat([onsets_ref[:1, :], onsets_ref[1:, :] - onsets_ref[:-1, :]], dim=0) == 1
-        onset_ref_diff = onset_ref_diff.to(torch.float)
-        onset_recall = torch.sum(onsets_pred_pad*onset_ref_diff) / torch.sum(onset_ref_diff)
-        onset_precision = torch.sum(onsets_pred_pad*onset_ref_diff) / torch.sum(onset_pred_diff)
-        onset_f1 = 2*onset_recall*onset_precision/(onset_recall+onset_precision)
-        metrics['metric/onsets/recall'].append( onset_recall )
-        metrics['metric/onsets/precision'].append( onset_precision )
-        metrics['metric/onsets/f1'].append( onset_f1 )
+        # # metrics of onset
+        # onsets_pred = (pred['onset'] > onset_threshold).cpu().to(torch.float)
+        # onsets_pred_pad = onsets_pred.clone()
+        # onsets_pred_pad[:-1] += onsets_pred[1:]
+        # onsets_pred_pad[1:] += onsets_pred[:-1]
+        # onsets_pred_pad[:-2] += onsets_pred[2:]
+        # onsets_pred_pad[2:] += onsets_pred[:-2]
+        # onsets_pred_pad[:-3] += onsets_pred[3:]
+        # onsets_pred_pad[3:] += onsets_pred[:-3]
+        # onsets_pred_pad = torch.clip(onsets_pred_pad, 0, 1)
+        # onset_pred_diff = torch.cat([onsets_pred[:1, :], onsets_pred[1:, :] - onsets_pred[:-1, :]], dim=0) == 1
+        # onset_pred_diff = onset_pred_diff.to(torch.float)
+        # onsets_ref = label['onset'].cpu().to(torch.float)
+        # onset_ref_diff = torch.cat([onsets_ref[:1, :], onsets_ref[1:, :] - onsets_ref[:-1, :]], dim=0) == 1
+        # onset_ref_diff = onset_ref_diff.to(torch.float)
+        # onset_recall = torch.sum(onsets_pred_pad*onset_ref_diff) / torch.sum(onset_ref_diff)
+        # onset_precision = torch.sum(onsets_pred_pad*onset_ref_diff) / torch.sum(onset_pred_diff)
+        # onset_f1 = 2*onset_recall*onset_precision/(onset_recall+onset_precision)
+        # metrics['metric/onsets/recall'].append( onset_recall )
+        # metrics['metric/onsets/precision'].append( onset_precision )
+        # metrics['metric/onsets/f1'].append( onset_f1 )
         # #############################3
         
 
