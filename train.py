@@ -84,9 +84,12 @@ def config():
 
 @ex.config
 def model_config():
-    SUB_NETS = ['onset_subnet', 'frame_subnet'] #['onset', 'frame', 'velocity']
+    SUB_NETS_TO_OPT = ['onset_subnet', 'frame_subnet'] #
+    # SUB_NETS_TO_OPT = ['all']
     onset_subnet_head_names = ['onset']
     frame_subnet_head_names = ['frame', 'offset', 'velocity']
+
+
     model_name = "HPP" # modeling harmonic structure and pitch invariance in piano transcription
     head_type = 'FB-LSTM' # 'LSTM', 'Conv'
     trunk_type = 'HD-Conv' # 'SD-Conv', 'Conv'
@@ -98,7 +101,7 @@ def model_config():
 @ex.config
 def train_with_test():
     # validation_interval = 50
-    test_interval = 50000
+    test_interval = 500000
 
     test_onset_threshold = 0.4
     test_frame_threshold = 0.3
@@ -108,9 +111,16 @@ def train_without_test():
     test_interval = None
 
 @ex.named_config
+def optimize_sumed_loss():
+    SUB_NETS_TO_OPT = ['all']
+
+##########################################33
+# baseline
+
+@ex.named_config
 # baseline 'onsets&frames'
 def train_baseline():
-    SUB_NETS = ['all']
+    SUB_NETS_TO_OPT = ['all']
     model_name='onsets&frames'
     model_size = 48 * 16
     iterations = 500*1000
@@ -147,7 +157,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     config = ex.current_run.config
 
-    SUB_NETS = config['SUB_NETS']
+    SUB_NETS_TO_OPT = config['SUB_NETS_TO_OPT']
 
 
     # add source files to ex
@@ -213,7 +223,9 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             model = HARPIST(N_MELS, MAX_MIDI - MIN_MIDI + 1, config).to(device)
 
         # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
-        for subnet in SUB_NETS:
+        # print(model.sub_nets)
+        for subnet in SUB_NETS_TO_OPT:
+            # print(subnet)
             optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
         resume_iteration = 0
     else:
@@ -221,7 +233,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         model = torch.load(model_path)
         # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
         # optimizer.load_state_dict(torch.load(os.path.join(logdir, 'last-optimizer-state.pt')))
-        for subnet in SUB_NETS:
+        for subnet in SUB_NETS_TO_OPT:
             optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
             optimizers[subnet].load_state_dict(torch.load(os.path.join(logdir, f'last-optimizer-state-{subnet}.pt')))
             
@@ -235,7 +247,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     # scheduler = StepLR(optimizer, step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
     schedulers = {}
-    for subnet in SUB_NETS:
+    for subnet in SUB_NETS_TO_OPT:
         schedulers[subnet] = StepLR(optimizers[subnet], step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
     
 
@@ -264,7 +276,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         # optimizer.step()
         # scheduler.step()
 
-        for subnet in SUB_NETS:
+        for subnet in SUB_NETS_TO_OPT:
             loss_subnet = losses[f'loss/{subnet}']
             optimizers[subnet].zero_grad()
             loss_subnet.backward()
@@ -350,5 +362,5 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             torch.save(model, os.path.join(logdir, f'model-{i}.pt'))
 
             # torch.save(optimizer.state_dict(), os.path.join(logdir, 'last-optimizer-state.pt'))
-            for subnet in SUB_NETS:
+            for subnet in SUB_NETS_TO_OPT:
                 torch.save(optimizers[subnet].state_dict(), os.path.join(logdir, f'last-optimizer-state-{subnet}.pt'))

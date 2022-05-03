@@ -140,6 +140,7 @@ class HARPIST(nn.Module):
         self.sub_nets = {}
         self.sub_nets['onset_subnet'] = self.subnet_onset
         self.sub_nets['frame_subnet'] = self.subnet_frame
+        self.sub_nets['all'] = nn.ModuleList([self.subnet_onset, self.subnet_frame])
 
     def forward(self, waveforms):
 
@@ -221,6 +222,7 @@ class HARPIST(nn.Module):
             predictions['velocity'] = results['velocity'].reshape(*velocity_label.shape)
             losses['loss/velocity'] = self.velocity_loss(predictions['velocity'], velocity_label, onset_label)
 
+        losses['loss/all'] = sum(losses.values())
 
         losses['loss/onset_subnet'] = 0
         for head in self.config['onset_subnet_head_names']:
@@ -229,6 +231,8 @@ class HARPIST(nn.Module):
         losses['loss/frame_subnet'] = 0
         for head in self.config['frame_subnet_head_names']:
             losses['loss/frame_subnet'] += losses['loss/' + head]
+
+        
 
         # onset_pred,  _, frame_pred, velocity_pred = self(mel)
 
