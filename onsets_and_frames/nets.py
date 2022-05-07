@@ -116,8 +116,9 @@ class CNNTrunk(nn.Module):
     def __init__(self, c_in = 2, c_har = 16,  embedding = 128, trunk_type='HD-Conv', fixed_dilation = 24) -> None:
         super().__init__()
 
-        self.block_1 = self.get_conv2d_block(c_in, c_har, kernel_size=5)
-        self.block_2 = self.get_conv2d_block(c_har, c_har, kernel_size=5)
+        self.block_1 = self.get_conv2d_block(c_in, c_har, kernel_size=7)
+        self.block_2 = self.get_conv2d_block(c_har, c_har, kernel_size=7)
+        self.block_2_5 = self.get_conv2d_block(c_har, c_har, kernel_size=7)
 
         c3_out = embedding
 
@@ -155,6 +156,7 @@ class CNNTrunk(nn.Module):
 
         x = self.block_1(log_gram_db)
         x = self.block_2(x)
+        x = self.block_2_5(x)
         x = self.conv_3(x)
         x = self.block_4(x)
         x = self.block_5(x)
