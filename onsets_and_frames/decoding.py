@@ -1,6 +1,32 @@
 import numpy as np
 import torch
 
+def get_note_duration(frames):
+    # inputs: ndarray [88 x T]
+    # outputs: ndarray [88 x T]
+    '''
+        input:
+            [[0,0,1,1,1,1,0],
+            [1,1,0,0,0,0,1],
+            [1,0,1,0,1,1,0],
+            [0,1,0,1,1,1,0],
+            [1,1,0,1,0,1,1]]
+        output:
+            [[0 0 4 3 2 1 0]
+            [2 1 0 0 0 0 1]
+            [1 0 1 0 2 1 0]
+            [0 1 0 3 2 1 0]
+            [2 1 0 1 0 2 1]]
+    '''
+    bins, T = frames.shape
+    assert(bins == 88)
+    durs = torch.zeros(frames.shape)
+    durs[:,-1] = frames[:,-1]
+    for i in range(T-1):
+        durs[:, -(i+2)] = (durs[:, -(i+1)] + 1) * frames[:, -(i+2)]
+
+    return durs.to(torch.int)
+
 
 def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold=0.5):
     """
@@ -31,26 +57,42 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
     frames = (frames > frame_threshold).cpu().to(torch.uint8)
     onset_diff = torch.cat([onsets[:1, :], onsets[1:, :] - onsets[:-1, :]], dim=0) == 1
 
+    # => [T x 88]
+    durs = get_note_duration(frames.T).T
+
     pitches = []
     intervals = []
     velocities = []
+
+    T = onsets.shape[0]
 
     for nonzero in onset_diff.nonzero():
         frame = nonzero[0].item()
         pitch = nonzero[1].item()
 
         onset = frame
-        offset = frame 
-        velocity_samples = []
+        if(onset + 1 >= T):
+            offset = onset
+        else:
+            offset = onset + min(durs[onset+1, pitch], 1000)
+        offset = min(offset, T)
 
-        while onsets[offset, pitch].item() or frames[offset, pitch].item():
-            if onsets[offset, pitch].item():
-                velocity_samples.append(velocity[offset, pitch].item())
-            offset += 1
-            if offset == onsets.shape[0]:
+        velocity_samples = []
+        onset_end = onset
+        while onsets[onset_end, pitch].item():
+            velocity_samples.append(velocity[onset_end, pitch].item())
+            onset_end += 1
+            if onset_end >= T:
                 break
-            if(offset - frame > 1000): # ignore more than 1000 frames. ()
-                break
+
+        # while onsets[offset, pitch].item() or frames[offset, pitch].item():
+        #     if onsets[offset, pitch].item():
+        #         velocity_samples.append(velocity[offset, pitch].item())
+        #     offset += 1
+        #     if offset == onsets.shape[0]:
+        #         break
+        #     if(offset - frame > 1000): # ignore more than 1000 frames. ()
+        #         break
 
         # consider all pred onset has a note.
         # if offset > onset:

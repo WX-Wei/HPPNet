@@ -103,7 +103,11 @@ def save_pianoroll_overlap(path, frames_label, frames_pred, frame_threshold=0.5,
     frames_label = (1 - frames_label.t().to(torch.uint8)).cpu()
     frames_pred = (1-(frames_pred.t() > frame_threshold).to(torch.uint8)).cpu()
     both = frames_label - frames_label + 1
+    # => [H x W x 3]
     image = torch.stack([frames_label, frames_pred, both], dim=2).flip(0).mul(255).numpy()
+    # change color of True Positive from blue[0,0,1] to gray[0.8,0.8,0.8] 
+    mask = (image[:,:,0] == 0).astype(np.int16) * (image[:,:,1] == 0).astype(np.int16) * (image[:,:,2] == 1).astype(np.int16) 
+    image[mask] = int(255*0.8)
     image = Image.fromarray(image, 'RGB')
     image = image.resize((image.size[0], image.size[1] * zoom))
     image.save(path)
