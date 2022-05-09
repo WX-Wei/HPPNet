@@ -288,7 +288,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
         for key, value in {'loss': loss, **losses}.items():
             writer.add_scalar(key, value.item(), global_step=i)
-            ex.log_scalar(key, value.item(),i)
+            # ex.log_scalar(key, value.item(),i)
 
         if(i %10 == 0):
             tqdm_dict['train/loss'] = loss.cpu().detach().numpy()
