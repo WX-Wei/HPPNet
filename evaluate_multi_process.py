@@ -11,7 +11,7 @@ from mir_eval.transcription import precision_recall_f1_overlap as evaluate_notes
 from mir_eval.transcription_velocity import precision_recall_f1_overlap as evaluate_notes_with_velocity
 from mir_eval.util import midi_to_hz
 import mir_eval
-from pyrsistent import v
+# from pyrsistent import v
 from scipy.stats import hmean
 from tqdm import tqdm
 from datetime import datetime
@@ -26,21 +26,28 @@ from onsets_and_frames import *
 
 eps = sys.float_info.epsilon
 
-def get_pred_lst(data, model, device, save_path, clip_len=10240):
+def get_pred_lst(dataset, model, device, save_path, clip_len=10240):
     # outputs:
     #   pred = [ {"onset":ndarray, "offset":..., "frame":..., "velocity":...}, {}, {}, ... ]
     #   losses = [{"loss/onset": scalar}, {}, ..., {}]
     # 
     pred_lst = []
     loss_lst = []
-    for label in data:
-        label['path'] = str(label['path'])
+    assert len(dataset) == len(dataset.data)
+    for i in tqdm(range(len(dataset)), desc="getting pred"):
 
-        if(not save_path is None):
-            os.makedirs(save_path, exist_ok=True)
-            pred_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.h5')
+        # label['path'] = str(label['path'])
+        label_path = dataset.data[i]
+
+
+        os.makedirs(save_path, exist_ok=True)
+        pred_path = os.path.join(save_path, os.path.basename(label_path)) # + '.pred.h5'
+        pred_path = pred_path.replace("flac", "flac'")
+        pred_path = pred_path.replace(".h5", ".flac'.pred.h5")
+        # print("pred_path", pred_path)
         # load previous pred
-        if(not save_path is None and os.path.exists(pred_path)):
+        if(os.path.exists(pred_path)):
+            continue
             pred = {'onset':None, 'offset':None, 'frame':None, 'velocity': None}
             losses = {'loss/onset': None, 'loss/offset': None, 'loss/frame': None, 'loss/velocity':None}
             with h5py.File(pred_path, 'r') as h5:
@@ -54,6 +61,7 @@ def get_pred_lst(data, model, device, save_path, clip_len=10240):
                         losses[key] = 0
         # get new pred
         else:
+            label = dataset[i]
             n_step =  label['onset'].shape[-2]
             
             label['audio'] = label['audio'].to(device)
@@ -117,26 +125,54 @@ def get_pred_lst(data, model, device, save_path, clip_len=10240):
                     for key, item in losses.items():
                         h5[key] = losses[key] = item.cpu().item()
 
-        loss_lst.append(losses)
+        # loss_lst.append(losses)
 
         # for key, value in pred.items():
         #     value.squeeze_(0).relu_()
-        pred_lst.append(pred)
 
-    return pred_lst, loss_lst
+        # pred_lst.append(pred)
+
+    return  pred_lst, loss_lst
 
 
 
 def cal_score(sample_data):
+    dataset = torch.load('dataset.tmp.pth')
+
+    device = sample_data['device']
+    
     #
     metric_dict = {}
 
     sample_id = sample_data['sample_id']
-    label = sample_data['label']
-    pred = sample_data['pred']
-    device = sample_data['device']
-    losses = sample_data['losses']
+    # label = sample_data['label']
+    label = dataset[sample_id]
+
+    # load pred in h5
+    label['path'] = str(label['path'])
+
     save_path = sample_data['save_path']
+    pred_path = os.path.join(save_path, os.path.basename(label['path']) + '.pred.h5')
+    pred_path = pred_path.replace("flac", "flac'")
+    # load previous pred
+
+    pred = {'onset':None, 'offset':None, 'frame':None, 'velocity': None}
+    losses = {'loss/onset': None, 'loss/offset': None, 'loss/frame': None, 'loss/velocity':None}
+    with h5py.File(pred_path, 'r') as h5:
+        for key in pred:
+            pred[key] = h5[key][:] / 255.0
+        for key in losses:
+            if(key in h5):
+                # losses[key] = torch.tensor(h5[key][()]).to(device)
+                losses[key] = h5[key][()]
+            else:
+                losses[key] = 0
+
+
+    # pred = sample_data['pred']
+    
+    # losses = sample_data['losses']
+    
     onset_threshold = sample_data['onset_threshold']
     frame_threshold = sample_data['frame_threshold']
 
@@ -277,11 +313,11 @@ def cal_score(sample_data):
     return metric_dict
 
 
-def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None, save_metrics_only=False, clip_len=10240):
+def evaluate(dataset, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None, save_metrics_only=False, clip_len=10240):
     metrics = defaultdict(list)
 
     print('getting pred list ...')
-    pred_lst, loss_lst = get_pred_lst(data, model, device, save_path, clip_len)
+    pred_lst, loss_lst = get_pred_lst(dataset, model, device, save_path, clip_len)
     print('pred_lst.len:', len(pred_lst))
 
     print('evaluating pred list ...')
@@ -292,7 +328,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
 
     
 
-    for i,label in enumerate(data):
+    for i in range(len(dataset)):
         
 
         # sample_metric_json_path = os.path.join(save_path, "%03d.json"%i)
@@ -304,22 +340,22 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
         # label = data[i]
 
         # label['audio'] = label['audio'].to(device) # use [0] to unbach
-        label['onset'] = label['onset'].cpu()
-        label['offset'] = label['offset'].cpu()
-        label['frame'] = label['frame'].cpu()
-        label['velocity'] = label['velocity'].cpu()
+        # label['onset'] = label['onset'].cpu()
+        # label['offset'] = label['offset'].cpu()
+        # label['frame'] = label['frame'].cpu()
+        # label['velocity'] = label['velocity'].cpu()
 
         # label['path'] = str(label['path'])
 
-        pred = pred_lst[i]
-        losses = loss_lst[i]
+        # pred = pred_lst[i]
+        # losses = loss_lst[i]
 
         sample_data = {}
-        del label['audio']
-        sample_data['label'] = label
-        sample_data['pred'] = pred
+        # del label['audio']
+        # sample_data['label'] = label
+        # sample_data['pred'] = pred
         sample_data['device'] = 'cpu'
-        sample_data['losses'] = losses
+        # sample_data['losses'] = losses
         sample_data['save_path'] = save_path
         sample_data['onset_threshold'] = onset_threshold
         sample_data['frame_threshold'] = frame_threshold
@@ -328,7 +364,9 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
 
         sample_data_list.append(sample_data)
 
-    pool_num = 7
+    torch.save(dataset, 'dataset.tmp.pth')
+
+    pool_num = 5
     print(f'use Pool(f{pool_num})')
     with Pool(pool_num) as pool:
         metric_list = list(tqdm(pool.imap(cal_score, sample_data_list), total=len(sample_data_list)))
@@ -369,7 +407,7 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
     model = torch.load(model_file, map_location=device).eval()
     summary(model)
 
-    metrics = evaluate(tqdm(dataset), model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=False, clip_len=clip_len)
+    metrics = evaluate(dataset, model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=False, clip_len=clip_len)
 
     
 
