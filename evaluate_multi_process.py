@@ -313,7 +313,7 @@ def cal_score(sample_data):
     return metric_dict
 
 
-def evaluate(dataset, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None, save_metrics_only=False, clip_len=10240):
+def evaluate(dataset, model, device, onset_threshold=0.5, frame_threshold=0.5, save_path=None, save_metrics_only=False, clip_len=10240, pool_num = 5):
     metrics = defaultdict(list)
 
     print('getting pred list ...')
@@ -366,7 +366,7 @@ def evaluate(dataset, model, device, onset_threshold=0.5, frame_threshold=0.5, s
 
     torch.save(dataset, 'dataset.tmp.pth')
 
-    pool_num = 5
+    
     print(f'use Pool(f{pool_num})')
     with Pool(pool_num) as pool:
         metric_list = list(tqdm(pool.imap(cal_score, sample_data_list), total=len(sample_data_list)))
@@ -389,7 +389,7 @@ def evaluate(dataset, model, device, onset_threshold=0.5, frame_threshold=0.5, s
 
 
 def evaluate_file(model_file, dataset_name, dataset_group, sequence_length, save_path,
-                  onset_threshold, frame_threshold, device, clip_len=10240):
+                  onset_threshold, frame_threshold, device, clip_len=10240, pool_num = 5):
 
 
     dataset_class = getattr(dataset_module, dataset_name)
@@ -410,7 +410,7 @@ def evaluate_file(model_file, dataset_name, dataset_group, sequence_length, save
     model = torch.load(model_file, map_location=device).eval()
     summary(model)
 
-    metrics = evaluate(dataset, model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=False, clip_len=clip_len)
+    metrics = evaluate(dataset, model, device, onset_threshold, frame_threshold, save_path, save_metrics_only=False, clip_len=clip_len, pool_num= pool_num)
 
     
 
@@ -460,6 +460,7 @@ if __name__ == '__main__':
     parser.add_argument('--frame-threshold', default=0.4, type=float)
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     # parser.add_argument('--device', default='cpu')
+    parser.add_argument('--pool_num', default=5, type=int)
 
     with torch.no_grad():
         evaluate_file(**vars(parser.parse_args()))
