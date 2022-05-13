@@ -14,6 +14,7 @@ import torch.utils.data
 
 import h5py
 import librosa
+import pandas as pd
 
 from .constants import *
 from .midi import parse_midi
@@ -216,9 +217,10 @@ class MAESTRO(PianoRollAudioDataset):
             if len(files) == 0:
                 raise RuntimeError(f'Group {group} is empty')
         else:
-            metadata = json.load(open(os.path.join(self.path, 'maestro-v1.0.0.json')))
+            # metadata = json.load(open(os.path.join(self.path, 'maestro-v3.0.0.json')))
+            meta_df = pd.read_csv(os.path.join(self.path, 'maestro-v3.0.0.csv'))
             files = sorted([(os.path.join(self.path, row['audio_filename'].replace('.wav', '.flac')),
-                             os.path.join(self.path, row['midi_filename'])) for row in metadata if row['split'] == group])
+                             os.path.join(self.path, row['midi_filename'])) for ind,row in meta_df.iterrows() if row['split'] == group])
 
             files = [(audio if os.path.exists(audio) else audio.replace('.flac', '.wav'), midi) for audio, midi in files if os.path.exists(audio)]
 
@@ -241,7 +243,7 @@ class MAESTRO(PianoRollAudioDataset):
 
 
 class MAPS(PianoRollAudioDataset):
-    def __init__(self, path='data/MAPS', groups=None, sequence_length=None, seed=42):
+    def __init__(self, path='/home/'+os.getlogin()+'/2T/vvx/piano_transcription/data/MAPS', groups=None, sequence_length=None, seed=42):
         super().__init__(path, groups if groups is not None else ['ENSTDkAm', 'ENSTDkCl'], sequence_length, seed)
 
     @classmethod
