@@ -85,9 +85,11 @@ def config():
 @ex.config
 def model_config():
     SUB_NETS_TO_OPT = ['onset_subnet', 'frame_subnet'] #
+    # SUB_NETS_TO_OPT = ['frame_subnet'] #
     # SUB_NETS_TO_OPT = ['all']
-    onset_subnet_head_names = ['onset']
-    frame_subnet_head_names = ['frame', 'offset', 'velocity']
+    onset_subnet_heads = ['onset']
+    frame_subnet_heads = ['frame', 'offset', 'velocity']
+
 
 
     model_name = "HPP" # modeling harmonic structure and pitch invariance in piano transcription
@@ -104,7 +106,7 @@ def train_with_test():
     test_interval = 500000
 
     test_onset_threshold = 0.4
-    test_frame_threshold = 0.3
+    test_frame_threshold = 0.4
 
 @ex.named_config
 def train_without_test():

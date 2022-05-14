@@ -104,13 +104,14 @@ class SubNet(nn.Module):
         #    "head_2": [B x T x 88],...
         # }
         
+        piano_roll_mask_new = piano_roll_mask
         if(self.time_pooling):
             x = F.max_pool2d(x, [2,1])
             src_size = piano_roll_mask.size()
-            piano_roll_mask_pool = F.max_pool2d(piano_roll_mask, [2,1])
+            piano_roll_mask_new = F.max_pool2d(piano_roll_mask, [2,1])
 
         # => [B x model_size x T x 88]
-        y = self.trunk(x, piano_roll_mask_pool)
+        y = self.trunk(x, piano_roll_mask_new)
 
         output = {}
         for head in self.head_names:
@@ -120,7 +121,7 @@ class SubNet(nn.Module):
                 output[head] = F.upsample(output[head], size=src_size[-2:], mode='bilinear')
             
             output[head] = output[head] * piano_roll_mask
-            output[head] = torch.squeeze(output[head], dim=1)
+            # output[head] = torch.squeeze(output[head], dim=1)
             output[head] = torch.clip(output[head], 1e-7, 1-1e-7)
 
         return output
@@ -135,16 +136,28 @@ class HARPIST(nn.Module):
 
         self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
 
-        # self.subnet_onset = SubNet(model_size, trunk_type, head_type, config['onset_subnet_head_names'])
-        self.subnet_frame = SubNet(model_size, trunk_type, head_type, config['frame_subnet_head_names'], concat=False, time_pooling=True)
+        self.subnet_onset = SubNet(model_size, trunk_type, head_type, config['onset_subnet_heads'])
+        self.subnet_frame = SubNet(model_size, trunk_type, head_type, config['frame_subnet_heads'], time_pooling=True)
+        self.combined_FBLSTM = FrqeBinLSTM(3, 1, 8)
+
 
         self.sub_nets = {}
-        # self.sub_nets['onset_subnet'] = self.subnet_onset
-        self.sub_nets['frame_subnet'] = self.subnet_frame
-        # self.sub_nets['all'] = nn.ModuleList([self.subnet_onset, self.subnet_frame])
+        self.sub_nets['onset_subnet'] = self.subnet_onset
+        self.sub_nets['frame_subnet'] = nn.ModuleList([self.subnet_frame, self.combined_FBLSTM])
+        self.sub_nets['all'] = nn.ModuleList([self.subnet_onset, self.subnet_frame])
 
     def forward(self, waveforms, piano_roll_mask):
-        # [b x n], [b x T x 88]
+        # inputs: [b x n], [b x T x 88]
+        # outputs: 
+        '''
+        {
+            "onset":[b x T x 88],
+            "frame":
+            "offset":
+            "velocity":
+            "combined_frame":
+        }
+        '''
 
         waveforms = waveforms.to(self.config['device'])
         piano_roll_mask = piano_roll_mask.to(self.config['device'])
@@ -178,10 +191,13 @@ class HARPIST(nn.Module):
             assert specgram_db.size()[2] == self.frame_num
         # specgram_db = cqt_db
 
-        # results, hidden = self.subnet_onset(specgram_db)
-        results = self.subnet_frame(specgram_db, piano_roll_mask.detach())
-        # results.update(results_2)
+        results = self.subnet_onset(specgram_db, piano_roll_mask.detach())
+        results_2 = self.subnet_frame(specgram_db, piano_roll_mask.detach())
+        results.update(results_2)
 
+        # => [b x 3 x T x 88]
+        combined_frame = torch.concat([results['frame'], results['onset'].detach(), results['offset'].detach()], dim=1)
+        results['combined_frame'] = self.combined_FBLSTM(combined_frame)
         return results
 
     def run_on_batch(self, batch):
@@ -211,12 +227,15 @@ class HARPIST(nn.Module):
         piano_roll_mask = F.max_pool2d(onset_pad, [1000, 1], stride=[1, 1])
         piano_roll_mask = piano_roll_mask[:, :self.frame_num, :]
 
+        # don't use mask
+        piano_roll_mask = piano_roll_mask - piano_roll_mask + 1
+
 
         # => [T x 88]
         # onset_pred, offset_pred, _, frame_pred, velocity_pred = self(mel)
         results = self.forward(audio_label_reshape, piano_roll_mask)
         predictions = {
-            'onset': onset_label, #  torch.clip(onset_label, 0, 0),
+            'onset': torch.clip(onset_label, 0, 0),
             'offset': torch.clip(offset_label, 0, 0),
             'frame': torch.clip(frame_label, 0, 0),
             'velocity': torch.clip(velocity_label, 0, 0)
@@ -233,11 +252,13 @@ class HARPIST(nn.Module):
             predictions['offset'] = results['offset'].reshape(*offset_label.shape)
             losses['loss/offset'] = F.binary_cross_entropy(predictions['offset'], offset_label)
         if 'frame' in results.keys():
-            predictions['frame'] = results['frame'].reshape(*frame_label.shape)
-            # losses['loss/frame'] = F.binary_cross_entropy(predictions['frame'], frame_label)
-            losses['loss/frame'] = bce(predictions['frame'] , frame_label) * piano_roll_mask
-            mask_sum = (piano_roll_mask.sum()+0.0000001)
-            losses['loss/frame'] = (losses['loss/frame']/mask_sum).sum()
+            predictions['frame'] = results['combined_frame'].reshape(*frame_label.shape)
+            activation = results['frame'].reshape(*frame_label.shape)
+            losses['loss/frame'] = F.binary_cross_entropy(predictions['frame'], frame_label) + \
+                                    F.binary_cross_entropy(activation, frame_label)
+            # losses['loss/frame'] = bce(predictions['frame'] , frame_label) * piano_roll_mask
+            # mask_sum = (piano_roll_mask.sum()+0.0000001)
+            # losses['loss/frame'] = (losses['loss/frame']/mask_sum).sum()
         if 'velocity' in results.keys():
             predictions['velocity'] = results['velocity'].reshape(*velocity_label.shape)
             losses['loss/velocity'] = self.velocity_loss(predictions['velocity'], velocity_label, onset_label)
@@ -245,11 +266,11 @@ class HARPIST(nn.Module):
         losses['loss/all'] = sum(losses.values())
 
         losses['loss/onset_subnet'] = torch.tensor(0.0).to(self.config['device'])
-        for head in self.config['onset_subnet_head_names']:
+        for head in self.config['onset_subnet_heads']:
             losses['loss/onset_subnet'] += losses['loss/' + head]
 
         losses['loss/frame_subnet'] = torch.tensor(0.0).to(self.config['device'])
-        for head in self.config['frame_subnet_head_names']:
+        for head in self.config['frame_subnet_heads']:
             losses['loss/frame_subnet'] += losses['loss/' + head]
 
         
