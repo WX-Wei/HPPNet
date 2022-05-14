@@ -139,8 +139,8 @@ class CNNTrunk(nn.Module):
         # self.conv_9 = nn.Conv2d(c3_out, 64,1)
         # self.conv_10 = nn.Conv2d(64, 1, 1)
 
-    def forward(self, log_gram_db):
-        # inputs: [b x 2 x T x n_freq]
+    def forward(self, log_gram_db, piano_roll_mask):
+        # inputs: [b x 2 x T x n_freq] , [b x 1 x T x 88]
         # outputs: [b x T x 88]
 
 
@@ -154,16 +154,22 @@ class CNNTrunk(nn.Module):
         # => [b x 1 x T x 352]
         # x = torch.unsqueeze(log_gram_db, dim=1)
 
+
+
         x = self.block_1(log_gram_db)
         x = self.block_2(x)
         x = self.block_2_5(x)
         x = self.conv_3(x)
         x = self.block_4(x)
+        # => [b x 1 x T x 88]
+        # piano_roll_mask = torch.unsqueeze(piano_roll_mask, dim=1)
+        x = x * piano_roll_mask
+
         x = self.block_5(x)
         # => [b x ch x T x 88]
-        x = self.block_6(x) + x
-        x = self.block_7(x) + x
-        x = self.block_8(x) + x
+        x = self.block_6(x) # + x
+        x = self.block_7(x) # + x
+        x = self.block_8(x) # + x
         # x = self.conv_9(x)
         # x = torch.relu(x)
         # x = self.conv_10(x)
