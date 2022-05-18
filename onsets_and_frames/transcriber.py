@@ -138,7 +138,7 @@ class HARPIST(nn.Module):
 
         self.subnet_onset = SubNet(model_size, trunk_type, head_type, config['onset_subnet_heads'])
         self.subnet_frame = SubNet(model_size, trunk_type, head_type, config['frame_subnet_heads'], time_pooling=True)
-        self.combined_FBLSTM = FrqeBinLSTM(3, 1, 8)
+        self.combined_FBLSTM = FrqeBinLSTM(3, 1, 128)
 
 
         self.sub_nets = {}
@@ -195,8 +195,11 @@ class HARPIST(nn.Module):
         results_2 = self.subnet_frame(specgram_db, piano_roll_mask.detach())
         results.update(results_2)
 
+        onset_high_conf = torch.max(results['onset'], (results['onset'] >= 0.4).float())
+        offset_high_conf = torch.max(results['offset'], (results['offset'] >= 0.4).float())
+
         # => [b x 3 x T x 88]
-        combined_frame = torch.concat([results['frame'], results['onset'].detach(), results['offset'].detach()], dim=1)
+        combined_frame = torch.concat([results['frame'], onset_high_conf.detach(), offset_high_conf.detach()], dim=1)
         results['combined_frame'] = self.combined_FBLSTM(combined_frame)
         return results
 
