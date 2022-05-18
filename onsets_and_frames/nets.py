@@ -109,8 +109,8 @@ class CNNTrunk(nn.Module):
                 nn.Conv2d(channel_in, channel_out, kernel_size=kernel_size, padding='same', dilation=dilation),
                 nn.ReLU(),
                 nn.MaxPool2d(pool_size),
-                nn.BatchNorm2d(channel_out),
-                # nn.InstanceNorm2d(channel_out)
+                # nn.BatchNorm2d(channel_out),
+                nn.InstanceNorm2d(channel_out)
             )
 
     def __init__(self, c_in = 2, c_har = 16,  embedding = 128, trunk_type='HD-Conv', fixed_dilation = 24) -> None:
