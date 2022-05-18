@@ -136,15 +136,18 @@ class HARPIST(nn.Module):
 
         self.amplitude_to_db = torchaudio.transforms.AmplitudeToDB(top_db=80)
 
-        self.subnet_onset = SubNet(model_size, trunk_type, head_type, config['onset_subnet_heads'])
-        self.subnet_frame = SubNet(model_size, trunk_type, head_type, config['frame_subnet_heads'], time_pooling=True)
-        self.combined_FBLSTM = FrqeBinLSTM(3, 1, 128)
-
-
         self.sub_nets = {}
-        self.sub_nets['onset_subnet'] = self.subnet_onset
-        self.sub_nets['frame_subnet'] = nn.ModuleList([self.subnet_frame, self.combined_FBLSTM])
-        self.sub_nets['all'] = nn.ModuleList([self.subnet_onset, self.subnet_frame])
+        self.sub_nets['all'] = nn.ModuleList() #[self.subnet_onset, self.subnet_frame]
+        if 'onset_subnet' in self.config['SUB_NETS_TO_OPT']:
+            self.subnet_onset = SubNet(model_size, trunk_type, head_type, config['onset_subnet_heads'])
+            self.sub_nets['onset_subnet'] = self.subnet_onset
+            self.sub_nets['all'].append(self.subnet_onset)
+        if 'frame_subnet' in self.config['SUB_NETS_TO_OPT']:
+            self.subnet_frame = SubNet(model_size, trunk_type, head_type, config['frame_subnet_heads'], time_pooling=True)
+            self.combined_FBLSTM = FrqeBinLSTM(3, 1, 128)
+            self.sub_nets['frame_subnet'] = nn.ModuleList([self.subnet_frame, self.combined_FBLSTM])
+            self.sub_nets['all'].append(self.subnet_frame)
+        
 
     def forward(self, waveforms, piano_roll_mask):
         # inputs: [b x n], [b x T x 88]

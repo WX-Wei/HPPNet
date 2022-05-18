@@ -84,14 +84,14 @@ def config():
 
 @ex.config
 def model_config():
-    # SUB_NETS_TO_OPT = ['onset_subnet', 'frame_subnet'] #
-    SUB_NETS_TO_OPT = ['onset_subnet'] #
+    SUB_NETS_TO_OPT = ['onset_subnet', 'frame_subnet'] #
+    # SUB_NETS_TO_OPT = ['onset_subnet'] #
     # SUB_NETS_TO_OPT = ['frame_subnet'] #
     # SUB_NETS_TO_OPT = ['all']
     onset_subnet_heads = ['onset']
     frame_subnet_heads = ['frame', 'offset', 'velocity']
-
-
+    # onset_subnet_heads = ['onset','frame', 'offset', 'velocity']
+    # frame_subnet_heads = []
 
     model_name = "HPP" # modeling harmonic structure and pitch invariance in piano transcription
     head_type = 'FB-LSTM' # 'LSTM', 'Conv'
@@ -100,6 +100,25 @@ def model_config():
     fixed_dilation = 24
 
     model_size = 128
+
+
+@ex.named_config
+def hpp_base():
+    model_size = 128
+    SUB_NETS_TO_OPT = ['onset_subnet']
+    onset_subnet_heads = ['onset','frame', 'offset', 'velocity']
+    frame_subnet_heads = []
+    batch_size=4
+    iterations = 600*1000
+
+@ex.named_config
+def hpp_tiny():
+    model_size = 64
+    SUB_NETS_TO_OPT = ['onset_subnet']
+    onset_subnet_heads = ['onset','frame', 'offset', 'velocity']
+    frame_subnet_heads = []
+    batch_size=4
+    iterations = 600*1000
 
 @ex.config
 def loss_config():
