@@ -84,7 +84,8 @@ def config():
 
 @ex.config
 def model_config():
-    SUB_NETS_TO_OPT = ['onset_subnet', 'frame_subnet'] #
+    # SUB_NETS_TO_OPT = ['onset_subnet', 'frame_subnet'] #
+    SUB_NETS_TO_OPT = ['onset_subnet'] #
     # SUB_NETS_TO_OPT = ['frame_subnet'] #
     # SUB_NETS_TO_OPT = ['all']
     onset_subnet_heads = ['onset']
@@ -99,6 +100,13 @@ def model_config():
     fixed_dilation = 24
 
     model_size = 128
+
+@ex.config
+def loss_config():
+    loss_type = "bce_loss"
+    loss_type = "focal_loss"
+    positive_weight = 2
+    focal_gamma = 2
 
 @ex.config
 def train_with_test():

@@ -191,16 +191,20 @@ class HARPIST(nn.Module):
             assert specgram_db.size()[2] == self.frame_num
         # specgram_db = cqt_db
 
-        results = self.subnet_onset(specgram_db, piano_roll_mask.detach())
-        results_2 = self.subnet_frame(specgram_db, piano_roll_mask.detach())
-        results.update(results_2)
+        results = {}
+        if 'onset_subnet' in self.config['SUB_NETS_TO_OPT']:
+            results_1 = self.subnet_onset(specgram_db, piano_roll_mask.detach())
+            results.update(results_1)
+        if 'frame_subnet' in self.config['SUB_NETS_TO_OPT']:
+            results_2 = self.subnet_frame(specgram_db, piano_roll_mask.detach())
+            results.update(results_2)
 
-        onset_high_conf = torch.max(results['onset'], (results['onset'] >= 0.4).float())
-        offset_high_conf = torch.max(results['offset'], (results['offset'] >= 0.4).float())
+            onset_high_conf = torch.max(results['onset'], (results['onset'] >= 0.4).float())
+            offset_high_conf = torch.max(results['offset'], (results['offset'] >= 0.4).float())
 
-        # => [b x 3 x T x 88]
-        combined_frame = torch.concat([results['frame'], onset_high_conf.detach(), offset_high_conf.detach()], dim=1)
-        results['combined_frame'] = self.combined_FBLSTM(combined_frame)
+            # => [b x 3 x T x 88]
+            combined_frame = torch.concat([results['frame'], onset_high_conf.detach(), offset_high_conf.detach()], dim=1)
+            results['combined_frame'] = self.combined_FBLSTM(combined_frame)
         return results
 
     def run_on_batch(self, batch):
@@ -248,33 +252,43 @@ class HARPIST(nn.Module):
         if 'onset' in results.keys():
             predictions['onset'] = results['onset'].reshape(*onset_label.shape)
             # [b x T x 88]
-            losses['loss/onset'] = - 2 * onset_label * torch.log(predictions['onset']) - ( 1 - onset_label) * torch.log(1-predictions['onset'])
+            if self.config['loss_type'] == "bce_loss":
+                losses['loss/onset'] = - 2 * onset_label * torch.log(predictions['onset']) - ( 1 - onset_label) * torch.log(1-predictions['onset'])
+            elif self.config['loss_type'] == "focal_loss":
+                losses['loss/onset'] = self.focal_bce_loss(predictions['onset'], onset_label)
+            else:
+                assert False, "unknown loss type: " + self.config['loss_type']
             losses['loss/onset'] = losses['loss/onset'].mean()
             # losses['loss/onset'] = F.binary_cross_entropy(predictions['onset'], onset_label)
         if 'offset' in results.keys():
             predictions['offset'] = results['offset'].reshape(*offset_label.shape)
             losses['loss/offset'] = F.binary_cross_entropy(predictions['offset'], offset_label)
         if 'frame' in results.keys():
-            predictions['frame'] = results['combined_frame'].reshape(*frame_label.shape)
-            activation = results['frame'].reshape(*frame_label.shape)
-            losses['loss/frame'] = F.binary_cross_entropy(predictions['frame'], frame_label) + \
-                                    F.binary_cross_entropy(activation, frame_label)
-            # losses['loss/frame'] = bce(predictions['frame'] , frame_label) * piano_roll_mask
-            # mask_sum = (piano_roll_mask.sum()+0.0000001)
-            # losses['loss/frame'] = (losses['loss/frame']/mask_sum).sum()
+            if 'combined_frame' in results.keys():
+                predictions['frame'] = results['combined_frame'].reshape(*frame_label.shape)
+                activation = results['frame'].reshape(*frame_label.shape)
+                losses['loss/frame'] = F.binary_cross_entropy(predictions['frame'], frame_label) + \
+                                        F.binary_cross_entropy(activation, frame_label)
+            else:
+                predictions['frame'] = results['frame'].reshape(*frame_label.shape)
+                losses['loss/frame'] = bce(predictions['frame'] , frame_label) * piano_roll_mask
+                mask_sum = (piano_roll_mask.sum()+0.0000001)
+                losses['loss/frame'] = (losses['loss/frame']/mask_sum).sum()
         if 'velocity' in results.keys():
             predictions['velocity'] = results['velocity'].reshape(*velocity_label.shape)
             losses['loss/velocity'] = self.velocity_loss(predictions['velocity'], velocity_label, onset_label)
 
         losses['loss/all'] = sum(losses.values())
 
-        losses['loss/onset_subnet'] = torch.tensor(0.0).to(self.config['device'])
-        for head in self.config['onset_subnet_heads']:
-            losses['loss/onset_subnet'] += losses['loss/' + head]
+        if 'onset_subnet' in self.config['SUB_NETS_TO_OPT']:
+            losses['loss/onset_subnet'] = torch.tensor(0.0).to(self.config['device'])
+            for head in self.config['onset_subnet_heads']:
+                losses['loss/onset_subnet'] += losses['loss/' + head]
 
-        losses['loss/frame_subnet'] = torch.tensor(0.0).to(self.config['device'])
-        for head in self.config['frame_subnet_heads']:
-            losses['loss/frame_subnet'] += losses['loss/' + head]
+        if 'frame_subnet' in self.config['SUB_NETS_TO_OPT']:
+            losses['loss/frame_subnet'] = torch.tensor(0.0).to(self.config['device'])
+            for head in self.config['frame_subnet_heads']:
+                losses['loss/frame_subnet'] += losses['loss/' + head]
 
         
 
@@ -295,6 +309,16 @@ class HARPIST(nn.Module):
         # }
 
         return predictions, losses
+
+    def focal_bce_loss(self, pred, label):
+        # focal_loss损失函数, -α(1-pred)**γ *ce_loss(label,pred)
+        # α: positive weight
+        pos_weight = self.config['positive_weight']
+        gamma = self.config['focal_gamma']
+        focal_ce = lambda y_pred, y_label, w: -w*torch.pow(1-y_pred, gamma)*y_label*torch.log(y_pred) 
+        loss = focal_ce(pred, label, pos_weight) + focal_ce(1-pred, 1-label, 1)
+        loss = loss.mean()
+        return loss
 
     def velocity_loss(self, velocity_pred, velocity_label, onset_label):
         denominator = onset_label.sum()
