@@ -120,6 +120,16 @@ def hpp_tiny():
     batch_size=4
     iterations = 600*1000
 
+@ex.named_config
+def hpp_ultra_tiny():
+    model_size = 48
+    SUB_NETS_TO_OPT = ['onset_subnet']
+    onset_subnet_heads = ['onset','frame', 'offset', 'velocity']
+    frame_subnet_heads = []
+    batch_size=4
+    iterations = 600*1000
+
+
 @ex.config
 def loss_config():
     loss_type = "bce_loss"

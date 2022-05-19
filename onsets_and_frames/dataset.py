@@ -198,7 +198,8 @@ maestro_10_percent_list = ['MIDI-Unprocessed_07_R1_2008_01-04_ORIG_MID--AUDIO_07
 
 class MAESTRO(PianoRollAudioDataset):
 
-    def __init__(self, path='/home/'+os.getlogin()+'/2T/vvx/piano_transcription/data/maestro-v3.0.0', groups=None, sequence_length=None, seed=42):
+    # def __init__(self, path='/home/'+os.getlogin()+'/2T/vvx/piano_transcription/data/maestro-v3.0.0', groups=None, sequence_length=None, seed=42):
+    def __init__(self, path='data/maestro-v3.0.0', groups=None, sequence_length=None, seed=42):
         super().__init__(path, groups if groups is not None else ['train'], sequence_length, seed)
 
     @classmethod

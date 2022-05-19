@@ -175,8 +175,8 @@ class HARPIST(nn.Module):
 
         # => [b x T x 352]
         # log_gram_mag = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :640, :]
-        cqt = to_cqt(waveforms).swapaxes(1, 2).float()
-        log_specgram = to_log_specgram(waveforms).swapaxes(1, 2).float()
+        cqt = to_cqt(waveforms).permute([0,2, 1]).float()
+        log_specgram = to_log_specgram(waveforms).permute([0,2, 1]).float()
         # log_specgram_2 = to_log_specgram(waveforms).swapaxes(1, 2).float()[:, :self.frame_num, :]
         
         cqt_db = self.amplitude_to_db(cqt)
