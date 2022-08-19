@@ -13,39 +13,10 @@ import matplotlib.pyplot as plt
 import os
 
 from .constants import *
-from .layers import WaveformToHarmgram
 from .lstm import BiLSTM
 
-# multiple rate dilated causal convolution
-class MRDC_Conv(nn.Module):
-    def __init__(self, in_channels, out_channels, dilation_list = [0, 12, 19, 24, 28, 31, 34, 36]):
-        super().__init__()
-        self.dilation_list = dilation_list
-        self.conv_list = []
-        for i in range(len(dilation_list)):
-            self.conv_list += [nn.Conv2d(in_channels, out_channels, kernel_size = [1, 1])]
-        self.conv_list = nn.ModuleList(self.conv_list)
-        
-    def forward(self, specgram):
-        # input [b x C x T x n_freq]
-        # output: [b x C x T x n_freq] 
-        specgram
-        dilation = self.dilation_list[0]
-        y = self.conv_list[0](specgram)
-        y = F.pad(y, pad=[0, dilation])
-        y = y[:, :, :, dilation:]
-        for i in range(1, len(self.conv_list)):
-            dilation = self.dilation_list[i]
-            x = self.conv_list[i](specgram)
-            # => [b x T x (n_freq + dilation)]
-            # x = F.pad(x, pad=[0, dilation])
-            x = x[:, :, :, dilation:]
-            n_freq = x.size()[3]
-            y[:, :, :, :n_freq] += x
 
-        return y
-
-class FrqeBinLSTM(nn.Module):
+class FreqGroupLSTM(nn.Module):
     def __init__(self, channel_in, channel_out, lstm_size) -> None:
         super().__init__()
 
@@ -113,7 +84,7 @@ class CNNTrunk(nn.Module):
                 nn.InstanceNorm2d(channel_out)
             )
 
-    def __init__(self, c_in = 2, c_har = 16,  embedding = 128, trunk_type='HD-Conv', fixed_dilation = 24) -> None:
+    def __init__(self, c_in = 1, c_har = 16,  embedding = 128, fixed_dilation = 24) -> None:
         super().__init__()
 
         self.block_1 = self.get_conv2d_block(c_in, c_har, kernel_size=7)
@@ -121,15 +92,8 @@ class CNNTrunk(nn.Module):
         self.block_2_5 = self.get_conv2d_block(c_har, c_har, kernel_size=7)
 
         c3_out = embedding
-
-        # self.block_3 = MRDC_Conv(c_har, 64, dilation_list=[48, 76, 96, 111, 124, 135, 144, 152, 159, 166])
         
-        if(trunk_type == 'Conv'):
-            self.conv_3 = nn.Conv2d(c_har, c3_out, [1, 3], padding='same')
-        elif(trunk_type == 'HD-Conv'):
-            self.conv_3 = HarmonicDilatedConv(c_har, c3_out)
-        elif(trunk_type == 'SD-Conv'):
-            self.conv_3 = nn.Conv2d(c_har, c3_out, [1, 8], padding='same', dilation=[1, fixed_dilation])
+        self.conv_3 = HarmonicDilatedConv(c_har, c3_out)
 
         self.block_4 = self.get_conv2d_block(c3_out, c3_out, pool_size=[1, 4], dilation=[1, 48])
         self.block_5 = self.get_conv2d_block(c3_out, c3_out, dilation=[1, 12])
@@ -139,7 +103,7 @@ class CNNTrunk(nn.Module):
         # self.conv_9 = nn.Conv2d(c3_out, 64,1)
         # self.conv_10 = nn.Conv2d(64, 1, 1)
 
-    def forward(self, log_gram_db, piano_roll_mask):
+    def forward(self, log_gram_db):
         # inputs: [b x 2 x T x n_freq] , [b x 1 x T x 88]
         # outputs: [b x T x 88]
 
@@ -162,8 +126,6 @@ class CNNTrunk(nn.Module):
         x = self.conv_3(x)
         x = self.block_4(x)
         # => [b x 1 x T x 88]
-        # piano_roll_mask = torch.unsqueeze(piano_roll_mask, dim=1)
-        x = x * piano_roll_mask
 
         x = self.block_5(x)
         # => [b x ch x T x 88]

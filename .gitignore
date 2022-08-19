@@ -7,3 +7,6 @@ runs_*
 output*
 logspecgram*
 results*
+test
+web/midi
+web/soundfonts_js

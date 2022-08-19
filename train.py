@@ -3,6 +3,8 @@ from datetime import datetime
 from re import sub, subn
 import copy
 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 import numpy as np
 from sacred import Experiment
 from sacred.commands import print_config
@@ -25,7 +27,7 @@ import matplotlib.pyplot as plt
 from random_words import RandomWords
 
 from evaluate import evaluate
-from onsets_and_frames import *
+from hppnet import *
 
 rw = RandomWords()
 random_word_str = rw.random_word()
@@ -46,12 +48,12 @@ ex.tags = []
 def config():
     logdir = 'runs/transcriber-' + time_str
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    iterations = 200*1000
+    iterations = 600*1000
     resume_iteration = None
     checkpoint_interval = 2000
     train_on = 'MAESTRO'
 
-    batch_size = 2
+    batch_size = 3
     sequence_length = 327680
     model_complexity = 48
 
@@ -84,28 +86,20 @@ def config():
 
 @ex.config
 def model_config():
-    SUB_NETS_TO_OPT = ['onset_subnet', 'frame_subnet'] #
-    # SUB_NETS_TO_OPT = ['onset_subnet'] #
-    # SUB_NETS_TO_OPT = ['frame_subnet'] #
-    # SUB_NETS_TO_OPT = ['all']
+    SUBNETS_TO_TRAIN = ['onset_subnet', 'frame_subnet'] 
     onset_subnet_heads = ['onset']
     frame_subnet_heads = ['frame', 'offset', 'velocity']
-    # onset_subnet_heads = ['onset','frame', 'offset', 'velocity']
-    # frame_subnet_heads = []
 
-    model_name = "HPP" # modeling harmonic structure and pitch invariance in piano transcription
-    head_type = 'FB-LSTM' # 'LSTM', 'Conv'
-    trunk_type = 'HD-Conv' # 'SD-Conv', 'Conv'
+    model_name = "HPPNet"
 
     fixed_dilation = 24
-
     model_size = 128
 
 
 @ex.named_config
 def hpp_base():
     model_size = 128
-    SUB_NETS_TO_OPT = ['onset_subnet']
+    SUBNETS_TO_TRAIN = ['onset_subnet']
     onset_subnet_heads = ['onset','frame', 'offset', 'velocity']
     frame_subnet_heads = []
     batch_size=4
@@ -114,7 +108,7 @@ def hpp_base():
 @ex.named_config
 def hpp_tiny():
     model_size = 64
-    SUB_NETS_TO_OPT = ['onset_subnet']
+    SUBNETS_TO_TRAIN = ['onset_subnet']
     onset_subnet_heads = ['onset','frame', 'offset', 'velocity']
     frame_subnet_heads = []
     batch_size=4
@@ -123,7 +117,7 @@ def hpp_tiny():
 @ex.named_config
 def hpp_ultra_tiny():
     model_size = 48
-    SUB_NETS_TO_OPT = ['onset_subnet']
+    SUBNETS_TO_TRAIN = ['onset_subnet']
     onset_subnet_heads = ['onset','frame', 'offset', 'velocity']
     frame_subnet_heads = []
     batch_size=4
@@ -132,12 +126,15 @@ def hpp_ultra_tiny():
 
 @ex.config
 def loss_config():
-    loss_type = "bce_loss"
-    loss_type = "focal_loss"
     positive_weight = 2
-    focal_gamma = 2
-
+    
 @ex.config
+def train_without_test():
+    test_interval = None
+    test_onset_threshold = 0.4
+    test_frame_threshold = 0.4
+
+@ex.named_config
 def train_with_test():
     # validation_interval = 50
     test_interval = 500000
@@ -145,41 +142,6 @@ def train_with_test():
     test_onset_threshold = 0.4
     test_frame_threshold = 0.4
 
-@ex.named_config
-def train_without_test():
-    test_interval = None
-
-@ex.named_config
-def optimize_sumed_loss():
-    SUB_NETS_TO_OPT = ['all']
-
-##########################################33
-# baseline
-
-@ex.named_config
-# baseline 'onsets&frames'
-def train_baseline():
-    SUB_NETS_TO_OPT = ['all']
-    model_name='onsets&frames'
-    model_size = 48 * 16
-    iterations = 500*1000
-    checkpoint_interval = 20000
-
-    batch_size=4
-
-
-
-    # batch_size = 2
-
-
-
-#####################################
-# ablation study
-
-# @ex.command
-# def empty_cmd(device = 'cpu'):
-#     print('empty command.')
-#     device='cpu'
 
 
 ex.main_locals = locals()
@@ -196,18 +158,18 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     config = ex.current_run.config
 
-    SUB_NETS_TO_OPT = config['SUB_NETS_TO_OPT']
+    SUBNETS_TO_TRAIN = config['SUBNETS_TO_TRAIN']
 
 
     # add source files to ex
     src_file_set = set()
     src_file_dir = os.path.join(ex.observers[1].dir, 'src')
-    utils.save_src_files(ex.main_locals, src_file_dir, query_str='onsets-and-frames', src_path_set=src_file_set)
+    utils.save_src_files(ex.main_locals, src_file_dir, query_str='hppnet', src_path_set=src_file_set)
     for src_path in src_file_set:
         ex.add_source_file(src_path)
 
     utils.copy_dir('./', src_file_dir)
-    utils.copy_dir('./onsets_and_frames', os.path.join(src_file_dir, 'onsets_and_frames'))
+    utils.copy_dir('./hppnet', os.path.join(src_file_dir, 'hppnet'))
 
 
     os.makedirs(logdir, exist_ok=True)
@@ -254,26 +216,19 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     optimizers = {}
     if resume_iteration is None:
-        if(model_name=='onsets&frames'):
-            model = OnsetsAndFrames(N_MELS, MAX_MIDI - MIN_MIDI + 1).to(device)
-            model.sub_nets = {}
-            model.sub_nets['all'] = torch.nn.ModuleList([x for x in  model.modules()])
-        else:
-            model = HARPIST(N_MELS, MAX_MIDI - MIN_MIDI + 1, config).to(device)
+        model = HPPNet(N_MELS, MAX_MIDI - MIN_MIDI + 1, config).to(device)
 
         # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
-        # print(model.sub_nets)
-        for subnet in SUB_NETS_TO_OPT:
-            # print(subnet)
-            optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
+        for subnet in SUBNETS_TO_TRAIN:
+            optimizers[subnet] = torch.optim.Adam(model.subnets[subnet].parameters(), learning_rate)
         resume_iteration = 0
     else:
         model_path = os.path.join(logdir, f'model-{resume_iteration}.pt')
         model = torch.load(model_path)
         # optimizer = torch.optim.Adam(model.parameters(), learning_rate)
         # optimizer.load_state_dict(torch.load(os.path.join(logdir, 'last-optimizer-state.pt')))
-        for subnet in SUB_NETS_TO_OPT:
-            optimizers[subnet] = torch.optim.Adam(model.sub_nets[subnet].parameters(), learning_rate)
+        for subnet in SUBNETS_TO_TRAIN:
+            optimizers[subnet] = torch.optim.Adam(model.subnets[subnet].parameters(), learning_rate)
             optimizers[subnet].load_state_dict(torch.load(os.path.join(logdir, f'last-optimizer-state-{subnet}.pt')))
             
     # summary
@@ -286,7 +241,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
     # scheduler = StepLR(optimizer, step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
     schedulers = {}
-    for subnet in SUB_NETS_TO_OPT:
+    for subnet in SUBNETS_TO_TRAIN:
         schedulers[subnet] = StepLR(optimizers[subnet], step_size=learning_rate_decay_steps, gamma=learning_rate_decay_rate)
     
 
@@ -307,15 +262,12 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
 
         loss = sum(losses.values())
 
-        if(model_name=='onsets&frames'):
-            losses[f'loss/all'] = loss
-        
         # optimizer.zero_grad()
         # loss.backward()
         # optimizer.step()
         # scheduler.step()
 
-        for subnet in SUB_NETS_TO_OPT:
+        for subnet in SUBNETS_TO_TRAIN:
             loss_subnet = losses[f'loss/{subnet}']
             optimizers[subnet].zero_grad()
             loss_subnet.backward()
@@ -353,6 +305,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         ##################################
         # Validate
         if i % validation_interval == 0:
+            print("validating...")
             model.eval()
             with torch.no_grad():
                 val_metrics = evaluate(validation_dataset, model, device)
@@ -370,6 +323,7 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
         # Test
         if not test_interval is None:
             if i % test_interval == 0:
+                print("testing...")
                 model.eval()
                 clip_len = 10240
                 test_result = {}
@@ -401,5 +355,5 @@ def train(logdir, device, iterations, resume_iteration, checkpoint_interval, tra
             torch.save(model, os.path.join(logdir, f'model-{i}.pt'))
 
             # torch.save(optimizer.state_dict(), os.path.join(logdir, 'last-optimizer-state.pt'))
-            for subnet in SUB_NETS_TO_OPT:
+            for subnet in SUBNETS_TO_TRAIN:
                 torch.save(optimizers[subnet].state_dict(), os.path.join(logdir, f'last-optimizer-state-{subnet}.pt'))

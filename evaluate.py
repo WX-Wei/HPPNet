@@ -18,8 +18,8 @@ import pandas as pd
 
 from torch.utils.data import Subset 
 
-import onsets_and_frames.dataset as dataset_module
-from onsets_and_frames import *
+import hppnet.dataset as dataset_module
+from hppnet import *
 
 eps = sys.float_info.epsilon
 
@@ -236,8 +236,7 @@ def evaluate(data, model, device, onset_threshold=0.5, frame_threshold=0.5, save
     return metrics
 
 
-def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path,
-                  onset_threshold, frame_threshold, device, clip_len=10240):
+def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path,onset_threshold, frame_threshold, device, clip_len=10240, mini_dataset=False):
 
     if(save_path == None):
         group_str = dataset_group if dataset_group is not None else 'default'
@@ -249,7 +248,8 @@ def evaluate_file(model_file, dataset, dataset_group, sequence_length, save_path
         kwargs['groups'] = [dataset_group]
     dataset = dataset_class(**kwargs)
 
-    # dataset = Subset(dataset, list(range(10)))
+    if(mini_dataset):
+        dataset = Subset(dataset, list(range(10)))
 
     model = torch.load(model_file, map_location=device).eval()
     summary(model)
@@ -301,8 +301,9 @@ if __name__ == '__main__':
     parser.add_argument('--save-path', default=None)
     parser.add_argument('--sequence-length', default=None, type=int)
     parser.add_argument('--onset-threshold', default=0.4, type=float)
-    parser.add_argument('--frame-threshold', default=0.3, type=float)
+    parser.add_argument('--frame-threshold', default=0.4, type=float)
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--mini-dataset', action='store_true')
 
     with torch.no_grad():
         evaluate_file(**vars(parser.parse_args()))

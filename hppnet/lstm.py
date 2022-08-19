@@ -30,8 +30,12 @@ class BiLSTM(nn.Module):
 
             # reverse direction
             if self.rnn.bidirectional:
-                h.zero_()
-                c.zero_()
+                # h.zero_()
+                # c.zero_()
+                # ONNX does not support tensor.zero_(), so use following:
+                h.fill_(0)
+                c.fill_(0)
+                
 
                 for start in reversed(slices):
                     end = start + self.inference_chunk_length
