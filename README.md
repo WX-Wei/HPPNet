@@ -61,3 +61,23 @@ python evaluate.py runs/transcriber/model-600000.pt MAESTRO test
 ## Acknowledgements
 
 This project is based on the PyTorch implementation of Onsets and Frames model => https://github.com/jongwook/onsets-and-frames
+
+
+## Citation
+
+```
+@inproceedings{Wei2022HPPNet,
+  author       = {Weixing Wei and
+                  Peilin Li and
+                  Yi Yu and
+                  Wei Li},
+  title        = {HPPNet: Modeling the Harmonic Structure and Pitch Invariance in Piano
+                  Transcription},
+  booktitle    = {Proceedings of the 23rd International Society for Music Information
+                  Retrieval Conference, {ISMIR} 2022, Bengaluru, India, December 4-8,
+                  2022},
+  pages        = {709--716},
+  year         = {2022},
+  url          = {https://archives.ismir.net/ismir2022/paper/000085.pdf},
+}
+```
